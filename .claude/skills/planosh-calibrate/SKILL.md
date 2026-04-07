@@ -1,3 +1,7 @@
+---
+description: plan.sh를 병렬 실행하여 발산 지점을 찾고 하네스를 강화. "calibrate", "발산 측정", "하네스 강화", "/planosh-calibrate" 등의 요청에 사용.
+---
+
 # /planosh-calibrate — 발산 탐지 및 하네스 강화
 
 plan.sh를 격리된 환경에서 N번 병렬 실행하고, 발산 지점을 찾아 사용자에게 결정을 요청한 뒤, 그 결정을 하네스에 추가한다.

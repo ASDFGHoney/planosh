@@ -1,3 +1,7 @@
+---
+description: PRD를 결정적인 plan.sh + 하네스로 변환. PRD 입력 → 대화형 기술 결정 → Step 분해 → plan.sh 생성. "plan 만들어줘", "PRD를 plan.sh로", "/planosh" 등의 요청에 사용.
+---
+
 # /planosh — PRD를 결정적인 plan.sh로 변환
 
 PRD를 입력받아 대화형으로 기술 결정을 하고, 실행 가능한 plan.sh + 하네스를 생성한다.
