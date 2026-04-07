@@ -15,7 +15,7 @@
 - **Why:** 커뮤니티 성장 플라이휠의 첫 바퀴. 스킬과 README만으로 자발적 기여자가 올지 불확실.
 - **Pros:** 전략이 있으면 launch 후 방치 방지. 측정 가능한 목표 설정 가능.
 - **Cons:** 제품이 좋으면 사람은 온다는 관점도 유효.
-- **Context:** 외부 리뷰에서 "닭과 달걀 문제"로 지적됨. 가능한 전략: 자체 dogfooding 사례를 examples/에 먼저 채우기, Twitter/HN에 데모 GIF 공유, AI 개발 커뮤니티에 직접 소개.
+- **Context:** 외부 리뷰에서 "닭과 달걀 문제"로 지적됨. 가능한 전략: 자체 dogfooding 사례를 .plan/에 먼저 채우기, Twitter/HN에 데모 GIF 공유, AI 개발 커뮤니티에 직접 소개.
 - **Depends on:** 스킬 구현 + seed 예제 완성 후
 
 ## TODO-003: /planosh-patterns — GitHub 레포에서 best practice 검색 및 패턴 제안
@@ -25,9 +25,9 @@
 - **Pros:** calibrate 전에 이미 검증된 규칙으로 하네스를 보강하면 초기 수렴률이 높아진다. 커뮤니티 기여에 대한 인센티브가 된다.
 - **Cons:** examples가 충분히 쌓이기 전까지는 검색 결과가 빈약할 수 있다. gh CLI 의존성.
 - **Scope:**
-  - `gh` CLI로 레포의 examples/ 하네스 코드, Discussions 패턴 논의, Issues 발산 보고를 검색
+  - `gh` CLI로 레포의 .plan/ 하네스 코드, Discussions 패턴 논의, Issues 발산 보고를 검색
   - 쿼리 유형: 스택 기반 ("nextjs auth"), 발산 기반 ("네이밍 발산"), 패턴 기반 ("verify 패턴"), 탐색 ("수렴률 높은 예제")
   - 현재 프로젝트에 plan.sh가 있으면 추천 규칙을 하네스에 바로 적용 가능
   - `/planosh` Phase 2에서 선택적으로 패턴 검색을 제안하는 연동
   - 추천 라벨 체계: `divergence:naming`, `stack:nextjs`, `convergence:100` 등
-- **Depends on:** examples/ 커뮤니티 기여가 일정 수준 이상 쌓인 후
+- **Depends on:** .plan/ 커뮤니티 기여가 일정 수준 이상 쌓인 후
