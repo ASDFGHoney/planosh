@@ -7,7 +7,7 @@ PRD를 입력받아 대화형으로 기술 결정을 하고, 실행 가능한 pl
 
 입력: PRD (마크다운)
 과정: PRD 분석 → 대화형 기술 결정 → Step 분해 → plan.sh + 하네스 생성
-출력: plan.sh + .plan/harness-global.md + .plan/harness-step-N.md
+출력: plan.sh + .plan/{plan-name}/harness-global.md + .plan/{plan-name}/harness-step-N.md
 ```
 
 ## Phase 1: PRD 읽기
@@ -26,7 +26,11 @@ PRD 요약:
 이 PRD로 plan.sh를 생성할까요?
 ```
 
-사용자가 확인하면 Phase 2로 진행한다.
+사용자가 확인하면 plan 이름을 결정한다. 이 이름이 `.plan/{name}/` 디렉토리명과 `PLAN_NAME` 변수가 된다. PRD 제목이나 기능명에서 slug를 추출하여 기본값으로 제안한다 (예: "팀 회고 앱 — 스프린트 1" → `retro-sprint1`).
+
+하나의 프로젝트에 여러 plan이 공존할 수 있으므로, 이미 `.plan/` 안에 다른 plan 폴더가 있으면 목록을 보여준다.
+
+Phase 2로 진행한다.
 
 ## Phase 2: 대화형 기술 결정
 
@@ -125,7 +129,7 @@ Step 2: ...
 
 승인을 받으면 다음 파일들을 생성한다.
 
-### 4-1. `.plan/harness-global.md`
+### 4-1. `.plan/{plan-name}/harness-global.md`
 
 ```markdown
 # 프로젝트 컨벤션
@@ -148,7 +152,7 @@ Step 2: ...
 {프레임워크에 맞는 금지 패턴 추가}
 ```
 
-### 4-2. `.plan/harness-step-N.md`
+### 4-2. `.plan/{plan-name}/harness-step-N.md`
 
 각 Step마다 하나씩 생성한다.
 
@@ -194,9 +198,11 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
 
+PLAN_NAME="{plan-name}"
+
 DRY_RUN=false; START_FROM=1
 # .plan-state가 있으면 마지막 실패 Step을 기본값으로 사용
-[ -f .plan-state ] && START_FROM=$(cat .plan-state)
+[ -f ".plan-state-$PLAN_NAME" ] && START_FROM=$(cat ".plan-state-$PLAN_NAME")
 for arg in "$@"; do
   case $arg in
     --dry) DRY_RUN=true ;;
@@ -205,7 +211,7 @@ for arg in "$@"; do
 done
 
 # ── 하네스 경로 ──
-HARNESS_DIR="$PROJECT_ROOT/.plan"
+HARNESS_DIR="$PROJECT_ROOT/.plan/$PLAN_NAME"
 GLOBAL_HARNESS="$HARNESS_DIR/harness-global.md"
 
 step() {
@@ -237,7 +243,7 @@ run_claude() {
 verify() {
   $DRY_RUN && echo "[DRY] 검증: $1" && return 0
   echo "🔍 $1"
-  eval "$2" || { echo "❌ $1"; echo "$CURRENT_STEP" > .plan-state; exit 1; }
+  eval "$2" || { echo "❌ $1"; echo "$CURRENT_STEP" > ".plan-state-$PLAN_NAME"; exit 1; }
   echo "✅ $1"
 }
 
@@ -260,14 +266,14 @@ checkpoint() {
 # ── 완료 ──
 echo ""; echo "🎉 계획 완료! 브랜치: $(git branch --show-current)"
 echo "다음: gh pr create --base main --head $(git branch --show-current)"
-rm -f .plan-state
+rm -f ".plan-state-$PLAN_NAME"
 ```
 
 각 Step은 다음 패턴으로 생성한다:
 
 ```bash
 # ── Step N: {이름} ──
-# 하네스: .plan/harness-global.md + .plan/harness-step-N.md
+# 하네스: .plan/{plan-name}/harness-global.md + .plan/{plan-name}/harness-step-N.md
 CURRENT_STEP=N; step N "{이름}"
 run_claude "
 {만들 것과 하지 않을 것을 포함한 프롬프트}
@@ -295,10 +301,10 @@ HOW는 하네스에 넣는다:
 
 ```
 생성 완료:
-  plan.sh                      ← 실행 계획
-  .plan/harness-global.md      ← 글로벌 하네스
-  .plan/harness-step-1.md      ← Step 1 하네스
-  .plan/harness-step-2.md      ← Step 2 하네스
+  plan.sh                                    ← 실행 계획
+  .plan/{plan-name}/harness-global.md        ← 글로벌 하네스
+  .plan/{plan-name}/harness-step-1.md        ← Step 1 하네스
+  .plan/{plan-name}/harness-step-2.md        ← Step 2 하네스
   ...
 
 다음 단계:

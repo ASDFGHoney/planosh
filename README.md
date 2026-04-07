@@ -79,13 +79,13 @@ planosh는 완성된 프레임워크를 제공하지 않는다. **"AI 실행 계
 
 ### plan.sh 공유
 
-`examples/` 디렉토리에 당신의 plan.sh와 `.plan/` 하네스를 PR로 기여해주세요.
+`examples/` 디렉토리에 당신의 plan.sh와 `.plan/{plan-name}/` 하네스를 PR로 기여해주세요.
 
 ```
 examples/
 └── your-project/
     ├── plan.sh
-    ├── .plan/
+    ├── .plan/{plan-name}/
     │   ├── harness-global.md
     │   └── harness-step-N.md
     └── README.md          ← 아래 템플릿 사용

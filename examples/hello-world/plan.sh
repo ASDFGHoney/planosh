@@ -15,9 +15,11 @@ set -euo pipefail
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
 
+PLAN_NAME="hello-world"
+
 DRY_RUN=false; START_FROM=1
 # .plan-state가 있으면 마지막 실패 Step을 기본값으로 사용
-[ -f .plan-state ] && START_FROM=$(cat .plan-state)
+[ -f ".plan-state-$PLAN_NAME" ] && START_FROM=$(cat ".plan-state-$PLAN_NAME")
 for arg in "$@"; do
   case $arg in
     --dry) DRY_RUN=true ;;
@@ -26,7 +28,7 @@ for arg in "$@"; do
 done
 
 # ── 하네스 경로 ──
-HARNESS_DIR="$PROJECT_ROOT/.plan"
+HARNESS_DIR="$PROJECT_ROOT/.plan/$PLAN_NAME"
 GLOBAL_HARNESS="$HARNESS_DIR/harness-global.md"
 
 step() {
@@ -58,7 +60,7 @@ run_claude() {
 verify() {
   $DRY_RUN && echo "[DRY] 검증: $1" && return 0
   echo "🔍 $1"
-  eval "$2" || { echo "❌ $1"; echo "$CURRENT_STEP" > .plan-state; exit 1; }
+  eval "$2" || { echo "❌ $1"; echo "$CURRENT_STEP" > ".plan-state-$PLAN_NAME"; exit 1; }
   echo "✅ $1"
 }
 
@@ -76,7 +78,7 @@ checkpoint() {
 [ "$START_FROM" -eq 1 ] && ! $DRY_RUN && git checkout -b plan-$(date +%Y%m%d) main 2>/dev/null || true
 
 # ── Step 1: 프로젝트 초기화 ──
-# 하네스: .plan/harness-global.md + .plan/harness-step-1.md
+# 하네스: .plan/hello-world/harness-global.md + .plan/hello-world/harness-step-1.md
 CURRENT_STEP=1; step 1 "프로젝트 초기화"
 run_claude "
 Node.js + TypeScript 프로젝트를 초기화하세요.
@@ -94,7 +96,7 @@ verify "src/index.ts 존재" "[ -f src/index.ts ]"
 checkpoint "chore: project init"
 
 # ── Step 2: HTTP 서버 ──
-# 하네스: .plan/harness-global.md + .plan/harness-step-2.md
+# 하네스: .plan/hello-world/harness-global.md + .plan/hello-world/harness-step-2.md
 CURRENT_STEP=2; step 2 "HTTP 서버"
 run_claude "
 node:http로 간단한 HTTP 서버를 구현하세요.
@@ -115,4 +117,4 @@ checkpoint "feat: http server"
 # ── 완료 ──
 echo ""; echo "🎉 계획 완료! 브랜치: $(git branch --show-current)"
 echo "다음: gh pr create --base main --head $(git branch --show-current)"
-rm -f .plan-state
+rm -f ".plan-state-$PLAN_NAME"

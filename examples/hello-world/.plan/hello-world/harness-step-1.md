@@ -2,7 +2,7 @@
 
 ## 현재 프로젝트 상태
 
-빈 프로젝트. plan.sh와 .plan/ 디렉토리만 존재.
+빈 프로젝트. plan.sh와 .plan/hello-world/ 디렉토리만 존재.
 
 ## 이 Step의 아키텍처 제약
 

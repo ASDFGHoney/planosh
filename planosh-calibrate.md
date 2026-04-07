@@ -7,14 +7,15 @@ plan.sh를 격리된 환경에서 N번 병렬 실행하고, 발산 지점을 찾
 
 입력: plan.sh + 기존 하네스
 과정: 병렬 실행 → 발산 분석 → 사용자에게 결정 요청 → 하네스 업데이트
-출력: 강화된 하네스 + .plan/divergence-report.md
+출력: 강화된 하네스 + .plan/{plan-name}/divergence-report.md
 ```
 
 기본값: `--runs=3`. `--step`을 생략하면 전체 plan.sh를 실행한다.
 
 ## 전제 조건
 
-- `plan.sh`와 `.plan/` 디렉토리가 현재 프로젝트에 존재해야 한다
+- `plan.sh`가 현재 프로젝트에 존재해야 한다
+- plan.sh 내부의 `PLAN_NAME` 변수를 읽어 `.plan/{plan-name}/` 디렉토리를 특정한다
 - `--step=M`을 사용할 경우, Step M-1까지 완료된 커밋이 현재 브랜치에 있어야 한다
 - v0 제약: 빌드/파일 검증만 있는 plan.sh에서만 병렬 실행이 안전하다. 포트나 DB를 사용하는 verify가 있으면 병렬 실행 시 충돌할 수 있다.
 
@@ -22,11 +23,13 @@ plan.sh를 격리된 환경에서 N번 병렬 실행하고, 발산 지점을 찾
 
 ### 1-1. 사전 검증
 
-plan.sh와 .plan/ 디렉토리가 존재하는지 확인한다.
+plan.sh에서 `PLAN_NAME`을 읽고, 해당 하네스 디렉토리가 존재하는지 확인한다.
 
 ```bash
 [ -f plan.sh ] || { echo "plan.sh를 찾을 수 없습니다."; exit 1; }
-[ -d .plan ] || { echo ".plan/ 디렉토리를 찾을 수 없습니다."; exit 1; }
+PLAN_NAME=$(grep '^PLAN_NAME=' plan.sh | head -1 | cut -d'"' -f2)
+[ -z "$PLAN_NAME" ] && { echo "plan.sh에 PLAN_NAME이 정의되지 않았습니다."; exit 1; }
+[ -d ".plan/$PLAN_NAME" ] || { echo ".plan/$PLAN_NAME/ 디렉토리를 찾을 수 없습니다."; exit 1; }
 ```
 
 `--step=M` 옵션이 있으면, plan.sh에서 해당 Step이 존재하는지 확인한다.
@@ -43,7 +46,7 @@ for i in $(seq 1 $RUNS); do
 done
 ```
 
-각 worktree에 .plan/ 디렉토리를 복사한다 (worktree는 tracked 파일만 공유하므로).
+각 worktree에 `.plan/$PLAN_NAME/` 디렉토리를 복사한다 (worktree는 tracked 파일만 공유하므로).
 
 ### 1-3. 병렬 실행
 
@@ -162,7 +165,7 @@ done
 
 ## Phase 5: 발산 리포트 생성
 
-`.plan/divergence-report.md`에 교정 결과를 기록한다.
+`.plan/$PLAN_NAME/divergence-report.md`에 교정 결과를 기록한다.
 
 ```markdown
 # 발산 리포트 — Step M: {Step 이름}
@@ -203,10 +206,10 @@ done
 {추가된 규칙 목록}
 ```
 
-교정 이력은 `.plan/calibration-history/`에 누적한다:
+교정 이력은 `.plan/$PLAN_NAME/calibration-history/`에 누적한다:
 
 ```
-.plan/calibration-history/
+.plan/{plan-name}/calibration-history/
 ├── step-M-run-1.log
 ├── step-M-run-2.log
 ├── step-M-run-3.log
@@ -232,7 +235,7 @@ rmdir .calibrate 2>/dev/null || true
   발산: {N}건 발견, {M}건 해결
   수렴율: {이전}% → {현재}% (예상)
   하네스 변경: {파일 목록}
-  리포트: .plan/divergence-report.md
+  리포트: .plan/{plan-name}/divergence-report.md
 
 다음 단계:
   1. 변경된 하네스를 확인하세요
