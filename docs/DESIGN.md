@@ -598,7 +598,17 @@ run_claude() {
     --dangerously-skip-permissions
 }
 verify() { echo "🔍 $1"; eval "$2" || { echo "❌ $1"; echo "$CURRENT_STEP" > .plan-state; exit 1; }; echo "✅ $1"; }
-checkpoint() { $DRY_RUN && return 0; git add -A && git commit -m "$1" || true; }
+checkpoint() {
+  $DRY_RUN && return 0
+  local step_harness="$HARNESS_DIR/harness-step-${CURRENT_STEP}.md"
+  # Step별 하네스에 파일 목록이 있으면 선택적 git add
+  if [ -f "$step_harness" ] && grep -q '생성할 파일 목록' "$step_harness"; then
+    # 목록 외 변경 파일 경고
+    local unexpected=$(git diff --name-only | grep -v -f <(grep '^\- ' "$step_harness" | sed 's/^- //') 2>/dev/null || true)
+    [ -n "$unexpected" ] && echo "⚠️ 범위 외 변경 감지: $unexpected"
+  fi
+  git add -A && git commit -m "$1"
+}
 
 [ "$START_FROM" -eq 1 ] && ! $DRY_RUN && git checkout -b dev-$(date +%Y%m%d) main 2>/dev/null || true
 
@@ -719,6 +729,7 @@ planosh가 git과 관련하여 유일하게 강제하는 것은 `/planosh-calibr
 2. **plan.sh 이식성:** plan.sh가 다른 LLM CLI에서도 동작해야 하는가 (`claude -p`만이 아닌)? v0는 Claude 전용이지만, 형식 자체는 어댑터 친화적일 수 있음.
 3. **검증 깊이:** 검증을 어디까지 할 것인가? 빌드만? 빌드 + 테스트? 빌드 + 테스트 + curl? 스킬이 사용자에게 물어야 하는가?
 4. **Step 세분화:** Step의 적절한 크기는? 스킬에 휴리스틱이 필요 (30분, 5-10개 파일, 단일 책임).
+5. **교정 루프 수렴 비보장:** 하네스에 규칙을 추가하면 프롬프트 맥락이 바뀌어 기존에 수렴했던 항목이 새로 발산할 수 있다. "2-3회 교정 루프면 수렴"은 경험적 추정이며, 수렴이 보장되지 않는 루프다. 규칙 추가 후 기존 수렴 항목의 회귀 테스트가 필요할 수 있음. 실제 실험으로 검증 필요.
 
 ## 성공 기준
 

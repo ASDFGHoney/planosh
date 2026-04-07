@@ -55,13 +55,11 @@ checkpoint "feat: Google OAuth login"
 └─────────────────────────────────────────────────────┘
 ```
 
-- **Layer 1** (하네스): `.plan/harness-global.md`(프로젝트 전체 컨벤션)와 `.plan/harness-step-N.md`(Step별 맥락 제약). "어떻게 만들지"를 제약한다.
-- **Layer 2** (프롬프트): "무엇을 만들지"를 제약한다.
-- **Layer 3** (verify): exit code 기반 사후 검증. AI 판단에 의존하지 않는다.
-
-WHAT과 HOW가 동시에 제약되면 해의 공간이 극적으로 좁아진다. 마크다운 명세를 AI가 읽는 5단계 변환(spec → plan → tasks → sessions → code)이 1단계(prompt → code)로 압축된다.
+WHAT(프롬프트)과 HOW(하네스)가 동시에 제약되면 해의 공간이 극적으로 좁아진다. 마크다운 명세를 AI가 읽는 5단계 변환(spec → plan → tasks → sessions → code)이 1단계(prompt → code)로 압축된다.
 
 **계획이 결정적이면 실행은 완전히 비동기가 된다.** 퇴근할 때 `bash plan.sh` 돌려놓으면 출근하면 되어있다.
+
+3계층 제약 모델의 상세 설계, 하네스 구조, 교정 루프 등은 [설계 문서](docs/DESIGN.md)를 참고.
 
 ## planosh는 프레임워크가 아니라 제안이다
 
