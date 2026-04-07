@@ -597,7 +597,7 @@ run_claude() {
     --append-system-prompt "$harness" \
     --dangerously-skip-permissions
 }
-verify() { echo "🔍 $1"; eval "$2" || { echo "❌ $1"; echo "$CURRENT_STEP" > .plan-state; exit 1; }; echo "✅ $1"; }
+verify() { $DRY_RUN && echo "[DRY] 검증: $1" && return 0; echo "🔍 $1"; eval "$2" || { echo "❌ $1"; echo "$CURRENT_STEP" > .plan-state; exit 1; }; echo "✅ $1"; }
 checkpoint() {
   $DRY_RUN && return 0
   local step_harness="$HARNESS_DIR/harness-step-${CURRENT_STEP}.md"
