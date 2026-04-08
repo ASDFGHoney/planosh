@@ -1,5 +1,145 @@
 # planosh
 
+> [한국어 버전은 아래에 있습니다](#planosh-1)
+
+In the age of AI coding tools for everyone — developers, PMs, designers all generate code with AI. But without a deterministic execution plan, just telling AI to "figure it out" leads to this:
+
+> **Developer**: "I'd have to run it through Claude to find out..."
+
+> **PM**: Submitted a PR. Please review. → 40 files changed, **+4,567 -12,300**
+>
+> If the execution plan had been reviewed first, and that plan was deterministic? No one would need to read a single line of code.
+
+> **A PM reads the spec and builds a feature with AI. It works.** A week later, they ask AI to make a small change to the same spec — and it rebuilds everything in a completely different structure. The PM can't read code, so they don't know what changed. They end up asking a developer for help.
+>
+> The spec existed. But the same plan didn't produce the same result.
+
+**A plan that isn't deterministic isn't a plan.**
+
+## plan.sh
+
+planosh proposes making AI execution plans into **deterministic shell scripts**.
+
+Each step is a `claude -p` call with an embedded prompt, a harness (system prompt) constraining HOW, and a verify step that validates results — all in a shell script. The plan is the execution.
+
+```bash
+# -- Step 2: Google OAuth --
+CURRENT_STEP=2; step 2 "Google OAuth login"
+run_claude "
+Implement Google OAuth login.
+## Build
+- User/Account/Session models (prisma)
+- NextAuth Google Provider + Prisma Adapter
+- /auth/signin page (Google login button)
+## Don't build
+- Email/password signup
+- Profile editing, team features
+"
+verify "Build succeeds" "npm run build"
+verify "Login page exists" "[ -f src/app/auth/signin/page.tsx ]"
+checkpoint "feat: Google OAuth login"
+```
+
+`run_claude` combines the prompt (-p) with a harness (--append-system-prompt) to invoke Claude. verify judges pass/fail by exit code. That's it.
+
+## Why is it deterministic?
+
+```
++-------------------------------------------------+
+| Layer 1: System Prompt (--append-system-prompt)  |
+| HOW -- coding conventions, architecture rules,   |
+| forbidden patterns                               |
++-------------------------------------------------+
+| Layer 2: User Prompt (-p)                        |
+| WHAT -- what to build, what not to build,        |
+| preconditions                                    |
++-------------------------------------------------+
+| Layer 3: Verification (verify)                   |
+| CHECK -- build, file existence, test pass        |
++-------------------------------------------------+
+```
+
+When WHAT (prompt) and HOW (harness) are constrained simultaneously, the solution space narrows dramatically. The 5-stage transformation where AI reads a markdown spec (spec -> plan -> tasks -> sessions -> code) compresses into 1 stage (prompt -> code).
+
+**When the plan is deterministic, execution becomes fully asynchronous.** Run `bash plan.sh` before leaving work, and it's done by morning.
+
+For the detailed design of the 3-layer constraint model, harness structure, and calibration loops, see the [design document](docs/DESIGN.md).
+
+## planosh is a proposal, not a framework
+
+planosh doesn't provide a finished framework. It **proposes the concept of making AI execution plans into deterministic shell scripts**, with the goal of building patterns and best practices together as a community.
+
+What we hope to see:
+
+- Share cases where combining while loops and harnesses achieved **100% determinism** for a specific step
+- Share patterns that knocked out 50-file, 20-step projects in a single plan.sh run
+- Create **harness templates** for specific stacks like Next.js, Rails, Flutter
+- Discover patterns that guarantee quality through deterministic verification alone, without AI judgment in verify
+- Share harness gaps found through calibration loops and their solutions
+
+As cases accumulate, patterns emerge. As patterns collect, they become a framework. planosh's role is to be that seed.
+
+## Contributing
+
+### Sharing plan.sh files
+
+Contribute your plan.sh and harness files via PR to the `.plan/` directory. The `.plan/` in this repo is the best practice collection.
+
+```
+.plan/
++-- your-plan-name/
+    +-- plan.sh
+    +-- harness-global.md
+    +-- harness-step-N.md
+    +-- README.md          <- Use the template below
+```
+
+Contribution README template:
+
+```markdown
+## Project
+(What you built)
+
+## Steps
+(How many, what each step does)
+
+## Determinism rate
+(Identical results ratio across N runs)
+
+## Key findings
+(Which harness/patterns were effective, what divergence you found and how you contained it)
+```
+
+### Pattern discussions
+
+Share your discovered patterns, experiment results, and ideas in [GitHub Discussions](../../discussions).
+
+### Divergence reports
+
+Report divergence cases in [Issues](../../issues). "I ran the same plan.sh and got this difference" is the best starting point for harness improvement.
+
+## Reference implementation
+
+planosh provides two Claude Code skills as reference implementations. plan.sh can be written by hand without them.
+
+- **`/planosh`** -- Takes a PRD, makes technical decisions interactively, and generates plan.sh + harness
+- **`/planosh-calibrate`** -- Runs plan.sh N times in parallel in isolated environments, finds divergence points, takes user decisions, and strengthens the harness
+
+Installation: Copy skill files to `.claude/skills/`
+
+```bash
+cp planosh.md .claude/skills/
+cp planosh-calibrate.md .claude/skills/
+```
+
+## Further reading
+
+- [Design document](docs/DESIGN.md) -- Problem definition, 3-layer constraint model, calibration loops, full plan.sh example
+
+---
+
+# planosh
+
 AI 코딩 도구가 팀 전체에 보급된 시대. 개발자, 기획자, 디자이너 모두가 AI로 코드를 만든다. 하지만 결정적인 실행 계획 없이 AI에게 "알아서 해줘"를 시키면, 이런 일이 벌어진다:
 
 > **개발자**: "그건 claude로 해봐야 알 것 같아요..ㅠㅠ"
