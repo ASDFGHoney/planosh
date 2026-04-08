@@ -1,4 +1,5 @@
 ---
+name: planosh
 description: PRD를 결정적인 plan.sh + 하네스로 변환. PRD 입력 → 대화형 기술 결정 → Step 분해 → plan.sh 생성. "plan 만들어줘", "PRD를 plan.sh로", "/planosh" 등의 요청에 사용.
 ---
 
@@ -89,6 +90,39 @@ verify에 넣을지 판단하는 기준: **같은 입력에 항상 같은 판정
 
 PRD의 기능을 Step으로 분해한다.
 
+### 핵심 원칙: 에이전트 작업과 사람 작업의 분리
+
+**plan.sh에는 에이전트(claude -p)가 자율적으로 완료할 수 있는 작업만 넣는다.**
+
+사람의 판단이나 행동이 필요한 작업은 plan.sh에 넣지 않고, 별도의 `plan-for-human.md`로 분리한다.
+
+에이전트가 할 수 있는 것:
+- 코드 생성, 수정, 삭제
+- 빌드, 테스트, 린트 실행
+- 파일 구조 생성
+- 설정 파일 작성
+
+사람이 해야 하는 것:
+- 외부 서비스 설정 (API 키 발급, DB 프로비저닝, 도메인 설정)
+- 디자인 리뷰, UX 검증
+- 수동 테스트, 브라우저 확인
+- 배포, 모니터링 설정
+- 비즈니스 판단이 필요한 결정
+
+### plan.sh 분리 규칙
+
+사람 작업이 에이전트 작업 사이에 끼어야 하는 경우, plan.sh를 여러 개로 나눈다:
+
+```
+plan-1.sh  (에이전트: 스캐폴딩 ~ API)
+  ↓
+[사람: API 키 설정, 디자인 리뷰]
+  ↓
+plan-2.sh  (에이전트: 프론트엔드 ~ 테스트)
+```
+
+사람 작업이 모두 시작 전이나 끝 후에만 있으면, plan.sh는 하나로 유지한다.
+
 ### Step 크기 휴리스틱
 
 - 단일 책임: 하나의 Step은 하나의 기능 단위
@@ -102,29 +136,52 @@ PRD의 기능을 Step으로 분해한다.
 각 Step에 대해 다음을 정의한다:
 
 - **이름**: 한 줄 설명
-- **만들 것**: 구체적 산출물 목록
-- **하지 않을 것**: 이 Step에서 명시적으로 제외할 것
-- **생성할 파일 목록**: 이 Step에서 생성/수정할 파일의 정확한 경로
-- **검증**: verify에 사용할 명령어
-- **커밋 메시지**: checkpoint에 사용할 메시지
+- **실행자**: 🤖 에이전트 또는 👤 사람
+- **만들 것**: 구체적 산출물 목록 (에이전트 Step만)
+- **하지 않을 것**: 이 Step에서 명시적으로 제외할 것 (에이전트 Step만)
+- **생성할 파일 목록**: 이 Step에서 생성/수정할 파일의 정확한 경로 (에이전트 Step만)
+- **검증**: verify에 사용할 명령어 (에이전트 Step만)
+- **커밋 메시지**: checkpoint에 사용할 메시지 (에이전트 Step만)
+- **할 일**: 사람이 수행할 체크리스트 (사람 Step만)
 
 ### 사용자 승인
 
 Step 분해 결과를 사용자에게 보여주고 승인을 받는다.
 
 ```
-Plan 구조 (N Steps):
+Plan 구조:
 
-Step 1: 프로젝트 스캐폴딩
-  만들 것: ...
-  검증: npm run build
-  커밋: chore: project scaffolding
+📋 plan-for-human.md (사전 작업):
+  👤 외부 서비스 API 키 발급
+  👤 디자인 시안 확정
 
-Step 2: ...
-  ...
+📜 plan-1.sh (에이전트 Step 1-3):
+  🤖 Step 1: 프로젝트 스캐폴딩
+     검증: npm run build
+  🤖 Step 2: DB 스키마 + API
+     검증: npx tsc --noEmit
+  🤖 Step 3: 프론트엔드 기본 UI
+     검증: npm run build
 
-이 구조로 plan.sh를 생성할까요?
+📋 plan-for-human.md (중간 작업):
+  👤 디자인 리뷰 + 피드백 반영
+
+📜 plan-2.sh (에이전트 Step 4-6):
+  🤖 Step 4: 디자인 피드백 반영
+     검증: npm run build
+  🤖 Step 5: 테스트
+     검증: npm test
+  🤖 Step 6: 최종 정리
+     검증: npm run build && npm test
+
+📋 plan-for-human.md (사후 작업):
+  👤 배포 환경 설정
+  👤 QA 테스트
+
+이 구조로 생성할까요?
 ```
+
+사람 작업이 에이전트 작업 사이에 없으면 plan.sh는 하나로 유지하고, plan-for-human.md에 사전/사후 작업만 기록한다.
 
 사용자가 수정을 요청하면 반영한 후 다시 승인을 받는다.
 승인 없이 파일을 생성하지 않는다.
@@ -132,6 +189,33 @@ Step 2: ...
 ## Phase 4: 파일 생성
 
 승인을 받으면 다음 파일들을 생성한다.
+
+### 4-0. `.plan/{plan-name}/plan-for-human.md`
+
+사람이 수행해야 할 작업을 시간순으로 정리한다.
+
+```markdown
+# {PRD 제목} — 사람 작업 체크리스트
+
+## 🟡 사전 작업 (plan.sh 실행 전)
+
+- [ ] {사전 작업 1}
+- [ ] {사전 작업 2}
+
+## 🟠 중간 작업 (plan-1.sh 실행 후, plan-2.sh 실행 전)
+
+> plan-1.sh가 완료된 후 아래 작업을 수행하고, plan-2.sh를 실행하세요.
+
+- [ ] {중간 작업 1}
+- [ ] {중간 작업 2}
+
+## 🟢 사후 작업 (모든 plan.sh 완료 후)
+
+- [ ] {사후 작업 1}
+- [ ] {사후 작업 2}
+```
+
+사람 작업이 없는 섹션은 생략한다. 중간 작업이 없으면 plan.sh를 나누지 않으므로 "중간 작업" 섹션도 생략한다.
 
 ### 4-1. `.plan/{plan-name}/harness-global.md`
 
@@ -180,7 +264,12 @@ Step 2: ...
 
 Step 1의 하네스에는 "현재 프로젝트 상태"가 빈 프로젝트이므로 해당 섹션을 생략하거나 "빈 프로젝트"로 명시한다.
 
-### 4-3. `plan.sh`
+### 4-3. `plan.sh` (또는 `plan-1.sh`, `plan-2.sh`, ...)
+
+사람 작업이 에이전트 작업 사이에 끼지 않으면 `plan.sh` 하나로 생성한다.
+사람 작업이 중간에 필요하면 `plan-1.sh`, `plan-2.sh`, ... 로 나눈다.
+
+각 plan 파일에는 **에이전트가 자율적으로 완료할 수 있는 Step만** 포함한다. 사람의 판단, 외부 서비스 설정, 수동 테스트 등은 절대 plan.sh에 넣지 않는다.
 
 아래 템플릿을 기반으로 생성한다. Step별 내용을 채운다.
 
@@ -189,6 +278,7 @@ Step 1의 하네스에는 "현재 프로젝트 상태"가 빈 프로젝트이므
 # 계획: {PRD 제목}
 # 생성: {날짜} by /planosh
 # PRD: {PRD 파일 경로}
+# 사람 작업: .plan/{plan-name}/plan-for-human.md 참조
 #
 # 사용법:
 #   bash plan.sh          전체 실행
@@ -301,19 +391,43 @@ HOW는 하네스에 넣는다:
 
 ## Phase 5: 최종 안내
 
-파일 생성이 완료되면 사용자에게 안내한다:
+파일 생성이 완료되면 사용자에게 안내한다.
+
+plan.sh가 하나인 경우:
 
 ```
 생성 완료:
-  plan.sh                                    ← 실행 계획
+  .plan/{plan-name}/plan-for-human.md        ← 사람 작업 체크리스트
+  plan.sh                                    ← 에이전트 실행 계획
   .plan/{plan-name}/harness-global.md        ← 글로벌 하네스
   .plan/{plan-name}/harness-step-1.md        ← Step 1 하네스
   .plan/{plan-name}/harness-step-2.md        ← Step 2 하네스
   ...
 
 다음 단계:
-  1. plan.sh를 읽고 리뷰하세요
-  2. bash plan.sh --dry 로 프롬프트를 미리 확인하세요
-  3. 리뷰 완료 후 bash plan.sh 로 실행하세요
-  4. /planosh-calibrate --step=N 으로 발산을 측정하고 하네스를 강화하세요
+  1. plan-for-human.md를 읽고 사전 작업을 완료하세요
+  2. plan.sh를 읽고 리뷰하세요
+  3. bash plan.sh --dry 로 프롬프트를 미리 확인하세요
+  4. 리뷰 완료 후 bash plan.sh 로 실행하세요
+  5. plan-for-human.md의 사후 작업을 수행하세요
+  6. /planosh-calibrate --step=N 으로 발산을 측정하고 하네스를 강화하세요
+```
+
+plan.sh가 분리된 경우:
+
+```
+생성 완료:
+  .plan/{plan-name}/plan-for-human.md        ← 사람 작업 체크리스트
+  plan-1.sh                                  ← 에이전트 실행 (Phase 1)
+  plan-2.sh                                  ← 에이전트 실행 (Phase 2)
+  .plan/{plan-name}/harness-global.md        ← 글로벌 하네스
+  .plan/{plan-name}/harness-step-*.md        ← Step별 하네스
+  ...
+
+다음 단계:
+  1. plan-for-human.md를 읽고 사전 작업을 완료하세요
+  2. bash plan-1.sh --dry → 리뷰 → bash plan-1.sh
+  3. plan-for-human.md의 중간 작업을 수행하세요
+  4. bash plan-2.sh --dry → 리뷰 → bash plan-2.sh
+  5. plan-for-human.md의 사후 작업을 수행하세요
 ```

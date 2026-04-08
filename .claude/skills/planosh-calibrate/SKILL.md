@@ -1,4 +1,5 @@
 ---
+name: planosh-calibrate
 description: plan.sh를 병렬 실행하여 발산 지점을 찾고 하네스를 강화. "calibrate", "발산 측정", "하네스 강화", "/planosh-calibrate" 등의 요청에 사용.
 ---
 
