@@ -1,0 +1,33 @@
+{
+  "name": "planosh",
+  "owner": {
+    "name": "graphicchiheon"
+  },
+  "metadata": {
+    "description": "PRD를 결정적인 plan.sh + 하네스로 변환. 계획이 곧 실행이다.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "planosh",
+      "source": "./",
+      "description": "PRD를 결정적인 plan.sh + 하네스로 변환하는 AI 실행 계획 생성기. /planosh로 계획 생성, /planosh-calibrate로 발산 탐지 및 하네스 강화.",
+      "version": "0.1.0",
+      "author": {
+        "name": "graphicchiheon"
+      },
+      "homepage": "https://github.com/ASDFGHoney/planosh",
+      "repository": "https://github.com/ASDFGHoney/planosh",
+      "license": "MIT",
+      "keywords": ["plan", "deterministic", "harness", "prd", "shell-script", "ai-coding"],
+      "category": "development",
+      "tags": [
+        "plan",
+        "deterministic",
+        "harness",
+        "prd",
+        "ai-coding"
+      ]
+    }
+  ]
+}

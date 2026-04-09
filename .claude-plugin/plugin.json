@@ -1,0 +1,19 @@
+{
+  "name": "planosh",
+  "version": "0.1.0",
+  "description": "PRD를 결정적인 plan.sh + 하네스로 변환하는 AI 실행 계획 생성기",
+  "author": {
+    "name": "graphicchiheon"
+  },
+  "homepage": "https://github.com/ASDFGHoney/planosh",
+  "repository": "https://github.com/ASDFGHoney/planosh",
+  "license": "MIT",
+  "keywords": [
+    "plan",
+    "deterministic",
+    "harness",
+    "prd",
+    "shell-script",
+    "ai-coding"
+  ]
+}

@@ -22,7 +22,7 @@ plan.sh를 격리된 환경에서 N번 병렬 실행하고, 발산 지점을 찾
 - `plan.sh`가 현재 프로젝트에 존재해야 한다
 - plan.sh 내부의 `PLAN_NAME` 변수를 읽어 `.plan/{plan-name}/` 디렉토리를 특정한다
 - `--step=M`을 사용할 경우, Step M-1까지 완료된 커밋이 현재 브랜치에 있어야 한다
-- v0 제약: 빌드/파일 검증만 있는 plan.sh에서만 병렬 실행이 안전하다. 포트나 DB를 사용하는 verify가 있으면 병렬 실행 시 충돌할 수 있다.
+- v0 제약: 포트나 DB를 사용하는 verify가 있으면 병렬 실행 시 충돌할 수 있다. 빌드/파일 검증만 있는 plan.sh에서 가장 안전하다.
 
 ## Phase 1: 격리 환경 생성 및 병렬 실행
 
@@ -39,29 +39,41 @@ PLAN_NAME=$(grep '^PLAN_NAME=' plan.sh | head -1 | cut -d'"' -f2)
 
 `--step=M` 옵션이 있으면, plan.sh에서 해당 Step이 존재하는지 확인한다.
 
-### 1-2. worktree 생성
+### 1-2. testbed 생성 (clone 방식)
 
-N개의 격리된 git worktree를 생성한다.
+N개의 격리된 clone을 `.plan/$PLAN_NAME/testbed/`에 생성한다.
 
 ```bash
-BASE_BRANCH=$(git branch --show-current)
+TESTBED_DIR=".plan/$PLAN_NAME/testbed"
+REPO_ROOT=$(git rev-parse --show-toplevel)
+rm -rf "$TESTBED_DIR"
+mkdir -p "$TESTBED_DIR"
+
 for i in $(seq 1 $RUNS); do
-  WORKTREE_DIR=".calibrate/run-$i"
-  git worktree add "$WORKTREE_DIR" -b "calibrate-run-$i" HEAD
+  git clone --depth 1 "file://$REPO_ROOT" "$TESTBED_DIR/run-$i"
 done
 ```
 
-각 worktree에 `.plan/$PLAN_NAME/` 디렉토리를 복사한다 (worktree는 tracked 파일만 공유하므로).
+- `file://` 프로토콜로 로컬 clone → 네트워크 불필요, 빠름
+- `--depth 1`로 히스토리 최소화
+- 각 clone은 완전 독립 → `.git` lock 경합 없음, 병렬 안전
+- `.plan/$PLAN_NAME/` 디렉토리가 tracked 상태가 아니면 각 clone에 수동 복사한다
+
+`testbed/`는 `.gitignore`에 추가하여 repo에 포함되지 않게 한다:
+
+```bash
+echo "testbed/" >> ".plan/$PLAN_NAME/.gitignore"
+```
 
 ### 1-3. 병렬 실행
 
-각 worktree에서 plan.sh를 실행한다. `--step=M`이 지정되면 해당 Step만 실행한다.
+각 clone에서 plan.sh를 실행한다. `--step=M`이 지정되면 해당 Step만 실행한다.
 
 Claude Code의 Agent 도구를 사용하여 각 run을 병렬로 실행한다:
 
 ```
 각 run에 대해 Agent를 spawn:
-  - worktree 디렉토리로 이동
+  - clone 디렉토리($TESTBED_DIR/run-$i)로 이동
   - bash plan.sh (또는 bash plan.sh --from=M 으로 특정 Step만)
   - 실행 결과를 run-N.log에 기록
 ```
@@ -71,15 +83,15 @@ Claude Code의 Agent 도구를 사용하여 각 run을 병렬로 실행한다:
 
 ### 1-4. 결과 수집
 
-각 worktree에서 실행 후 변경된 파일 목록과 내용을 수집한다.
+각 clone에서 실행 후 변경된 파일 목록과 내용을 수집한다.
 
 ```bash
 for i in $(seq 1 $RUNS); do
-  WORKTREE_DIR=".calibrate/run-$i"
+  RUN_DIR="$TESTBED_DIR/run-$i"
   # 변경된 파일 목록
-  git -C "$WORKTREE_DIR" diff --name-only HEAD > ".calibrate/run-$i-files.txt"
+  git -C "$RUN_DIR" diff --name-only HEAD > "$TESTBED_DIR/run-$i-files.txt"
   # 각 파일의 내용
-  git -C "$WORKTREE_DIR" diff HEAD > ".calibrate/run-$i-diff.patch"
+  git -C "$RUN_DIR" diff HEAD > "$TESTBED_DIR/run-$i-diff.patch"
 done
 ```
 
@@ -223,15 +235,13 @@ done
 
 ## Phase 6: cleanup 및 안내
 
-### worktree 정리
+### testbed 정리
 
 ```bash
-for i in $(seq 1 $RUNS); do
-  git worktree remove ".calibrate/run-$i" --force 2>/dev/null || true
-  git branch -D "calibrate-run-$i" 2>/dev/null || true
-done
-rmdir .calibrate 2>/dev/null || true
+rm -rf "$TESTBED_DIR"
 ```
+
+clone은 완전 독립이므로 단순 삭제로 정리 완료. 브랜치 관리 불필요.
 
 ### 결과 안내
 
