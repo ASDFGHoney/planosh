@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">planosh</h1>
   <p align="center">
-    <strong>Deterministic execution plans for AI coding teams.</strong>
+    <strong>Determinism first. Everything else follows.</strong>
   </p>
   <p align="center">
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
@@ -13,34 +13,40 @@
 
 ---
 
-> **Developer**: "I'd have to run it through Claude to find out..."
->
-> **PM**: Submitted a PR. Please review. &rarr; 40 files changed, **+4,567 -12,300**
->
-> If the execution plan had been reviewed first, and that plan was deterministic? No one would need to read a single line of code.
+**The plan-code gap is what actually breaks AI coding teams. Every spec-driven tool claims to close it. None of them do.**
 
-**A plan that isn't deterministic isn't a plan.**
+Markdown specs don't turn into code. They turn into *interpretations* of code, and every AI session produces a different one. Worse, **AI defaults to "build more" whenever it meets ambiguity**. Ask for a login and you get MFA, email verification, rate limiting, three abstract layers &mdash; none of which you asked for. **40 files changed, +4,567 -12,300. That's how the PR gets born.**
 
-We ran a single `plan.sh` for **16 hours straight** &mdash; zero human intervention &mdash; and it succeeded on the first run. The plan was over-linear and over-verified, so it took longer than it needed to. But it worked. Every step passed. No one touched the keyboard.
+SDD tools hide this gap behind a friendlier UI, and inside that UI, AI never stops over-implementing. Writing "don't build this" in the spec doesn't help &mdash; the spec is prose, and the underlying structure that maps identical input to divergent output is still there.
 
-That's the promise: **write the plan once, walk away, come back to working code.**
+---
 
-## Why planosh
+planosh's answer is one thing. **Determinism.**
 
-<table>
-<tr>
-<td width="25%" align="center"><strong>Deterministic</strong></td>
-<td width="25%" align="center"><strong>Reviewable</strong></td>
-<td width="25%" align="center"><strong>Asynchronous</strong></td>
-<td width="25%" align="center"><strong>Verifiable</strong></td>
-</tr>
-<tr>
-<td>Same plan, same result. Every time.</td>
-<td>Review the plan, not the 4,567 lines of generated code.</td>
-<td>Run <code>bash plan.sh</code> before leaving work. Done by morning.</td>
-<td>Every step has a check. Shell exit codes, not AI judgment.</td>
-</tr>
-</table>
+Same plan, same code. Every time. Everything else follows from this one principle:
+
+- **When there's no room for interpretation, there's no over-implementation.** Over-implementation is a symptom of low determinism, not a separate problem.
+- **When results converge, unattended execution stops being a gamble.** Kick off `plan.sh` before leaving work. Come back to working code.
+- **When the plan predicts the output, teams review the plan instead of the code.** You don't need to open a 4,000-line PR.
+- **When non-developers can review plans, the entire team can build with AI.** Determinism pulls people who can't read code into the development loop.
+
+Determinism is measurable &mdash; run the same plan N times in parallel and diff the outputs. Divergence marks the places that aren't deterministic yet. Find the divergence, close it, measure again. That loop is what planosh is.
+
+---
+
+**The evidence.** We ran one `plan.sh` for **16 hours unattended**, migrating a production app (1+ year in the wild) from Flutter to React Native. It finished on the first try. No one touched the keyboard.
+
+Writing the plan took 2 days. **That ratio is the whole point.** Make the plan deterministic before you execute, and execution stops being a gamble.
+
+## Existing SDD tools vs. planosh
+
+| Existing SDD tools | planosh |
+|---|---|
+| AI over-implements while interpreting the spec | The plan is deterministic, so interpretation never happens |
+| Measures "did it work?" | **Measures "did it converge?"** (same plan &rarr; same code, N runs) |
+| You review 4,000 lines of PR | You review the plan. Skip the code. |
+| Unattended execution is a gamble | **Determinism makes 16-hour unattended runs real** |
+| "Deterministic" is a marketing claim | Determinism is a number you measure and shrink |
 
 ## What it looks like
 
@@ -167,10 +173,21 @@ Built something with planosh? [Open a PR](https://github.com/ASDFGHoney/planosh/
 
 *Your project could be the first.*
 
+## Best Practices
+
+The `best-practices/` directory collects planosh's **execution pattern best practices**. (Where `.plan/` is the community's **domain plan collection**, this is the meta layer — how to design and run plan.sh itself.)
+
+| Best practice | Description |
+|---|---|
+| [push-race](best-practices/push-race/plan-for-human.md) | Run the same plan in parallel across N isolated clones. `git push` atomicity (optimistic locking) decides a single winner. No orchestrator. |
+
+Each best practice ships in the same shape as a planosh output (`plan.sh` + `plan-for-human.md` + `harness-*.md`), so you can copy it into your project and adapt it directly.
+
 ## Further reading
 
 - [Design Document](docs/DESIGN.md) &mdash; Problem definition, 3-layer constraint model, calibration loops, full plan.sh example
 - [Example PRDs](docs/) &mdash; Retro webapp, C compiler, Markdown-to-slides
+- [Best Practices](best-practices/) &mdash; Reference implementations for execution patterns like push-race
 
 ## License
 
