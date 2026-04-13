@@ -12,7 +12,7 @@ PRD를 입력받아 대화형으로 기술 결정을 하고, 실행 가능한 pl
 
 입력: PRD (마크다운)
 과정: 입구 검증 → PRD 분석 → 기술 결정 인터뷰 → Step 분해 → plan.sh + 하네스 생성
-출력: .plan/{plan-name}/plan.sh + .plan/{plan-name}/harness-for-plan.md + .plan/{plan-name}/harness-for-step-N.md
+출력: .plan/{plan-name}/plan.sh + steps.json + steps/*.md + harness-for-plan.md
 ```
 
 ---
@@ -400,10 +400,11 @@ plan-2.sh  (에이전트: 프론트엔드 ~ 테스트)
 - **실행자**: 에이전트 또는 사람
 - **만들 것**: 구체적 산출물 목록 (에이전트 Step만). 관련 결정 ID를 괄호로 표기.
 - **하지 않을 것**: 이 Step에서 명시적으로 제외할 것 (에이전트 Step만). 관련 결정 ID를 괄호로 표기.
-- **생성할 파일 목록**: 이 Step에서 생성/수정할 파일의 정확한 경로 (에이전트 Step만)
 - **검증**: verify에 사용할 명령어 (에이전트 Step만)
 - **커밋 메시지**: checkpoint에 사용할 메시지 (에이전트 Step만)
 - **할 일**: 사람이 수행할 체크리스트 (사람 Step만)
+
+참고: 생성할 파일 목록, 아키텍처 제약 등 step 수준의 하네스 정보는 초기 생성 시 포함하지 않는다. `/planosh-calibrate`에서 발산이 발견되면 해당 step 프롬프트에 직접 추가된다.
 
 ### 사용자 승인
 
@@ -507,40 +508,79 @@ Phase 2에서 확정된 기술 결정을 두 구간으로 분리하여 기록한
 
 PROVISIONAL 항목이 있으면 해당 결정 옆에 `# PROVISIONAL — 추후 변경 가능` 태그를 붙인다.
 
-### 4-2. `.plan/{plan-name}/harness-for-step-N.md`
+### 4-2. `.plan/{plan-name}/steps.json`
 
-각 Step마다 하나씩 생성한다.
+step 매니페스트. plan.sh가 이 파일을 읽어 실행한다. 사람도 이 파일로 plan의 전체 구조를 한눈에 파악한다.
 
-```markdown
-# Step N 하네스: {Step 이름}
-
-## 현재 프로젝트 상태
-
-{이전 Step들이 완료된 후 존재하는 파일/상태 목록}
-
-## 이 Step의 아키텍처 제약
-
-{이 Step에 특화된 아키텍처 결정}
-
-## 이 Step에서 생성할 파일 목록 (이 목록 외 파일 생성 금지)
-
-- path/to/file1
-- path/to/file2
-...
+```json
+{
+  "plan_name": "{plan-name}",
+  "prd": "{PRD 파일 경로}",
+  "created": "{날짜}",
+  "steps": [
+    {
+      "id": 1,
+      "name": "{Step 이름}",
+      "prompt": "step-1.md",
+      "verify": [
+        { "name": "{검증 이름}", "run": "{검증 명령}" }
+      ],
+      "commit": "{커밋 메시지}"
+    },
+    {
+      "id": 2,
+      "name": "{Step 이름}",
+      "prompt": "step-2.md",
+      "verify": [
+        { "name": "{검증 이름}", "run": "{검증 명령}" },
+        { "name": "{검증 이름}", "run": "{검증 명령}" }
+      ],
+      "commit": "{커밋 메시지}"
+    }
+  ]
+}
 ```
 
-Step 1의 하네스에는 "현재 프로젝트 상태"가 빈 프로젝트이므로 해당 섹션을 생략하거나 "빈 프로젝트"로 명시한다.
+- `prompt` 값은 `steps/` 디렉토리 기준 상대 경로다.
+- `verify` 배열은 순서대로 실행된다. 하나라도 실패하면 중단.
+- 사람 step은 steps.json에 포함하지 않는다 (plan-for-human.md에만).
 
-### 4-3. `.plan/{plan-name}/plan.sh` (또는 `plan-1.sh`, `plan-2.sh`, ...)
+### 4-3. `.plan/{plan-name}/steps/step-N.md`
+
+각 Step의 프롬프트를 개별 마크다운 파일로 생성한다. plan.sh에서 `-p` 인자로 전달되는 내용이다.
+
+```markdown
+{한 줄 지시}
+
+## 만들 것
+- {산출물 1} (D-00X)
+- {산출물 2} (D-00Y)
+
+## 하지 않을 것
+- {제외 항목 1} (D-00Z)
+```
+
+프롬프트에는 WHAT만 넣는다:
+- "만들 것" — 이 Step의 구체적 산출물. 관련 결정 ID를 괄호로 표기.
+- "하지 않을 것" — 이 Step의 범위 외 항목. 관련 결정 ID를 괄호로 표기.
+
+HOW(기술 결정, 코딩 컨벤션)는 harness-for-plan.md에 있으므로 프롬프트에 반복하지 않는다.
+프롬프트가 짧을수록 좋다.
+
+참고: `/planosh-calibrate`가 발산을 발견하면, 이 파일의 끝에 `## 아키텍처 제약`이나 `## 생성할 파일 목록` 섹션이 자동으로 추가된다. 초기 생성 시에는 "만들 것"과 "하지 않을 것"만 포함한다.
+
+### 4-4. `.plan/{plan-name}/plan.sh` (또는 `plan-1.sh`, `plan-2.sh`, ...)
 
 사람 작업이 에이전트 작업 사이에 끼지 않으면 `plan.sh` 하나로 생성한다.
 사람 작업이 중간에 필요하면 `plan-1.sh`, `plan-2.sh`, ... 로 나눈다.
 
-**plan.sh는 `.plan/{plan-name}/` 디렉토리 안에 생성한다.** 하네스 파일들과 같은 위치에 둔다.
+**plan.sh는 `.plan/{plan-name}/` 디렉토리 안에 생성한다.** steps.json, steps/, harness-for-plan.md와 같은 위치에 둔다.
 
 각 plan 파일에는 **에이전트가 자율적으로 완료할 수 있는 Step만** 포함한다. 사람의 판단, 외부 서비스 설정, 수동 테스트 등은 절대 plan.sh에 넣지 않는다.
 
-아래 템플릿을 기반으로 생성한다. Step별 내용을 채운다.
+plan.sh는 **범용 러너**다. step-specific 코드를 포함하지 않는다. steps.json을 읽어 루프로 실행한다.
+
+아래 템플릿을 **그대로** 사용한다. `{plan-name}` 부분만 치환한다.
 
 ```bash
 #!/bin/bash
@@ -557,17 +597,14 @@ Step 1의 하네스에는 "현재 프로젝트 상태"가 빈 프로젝트이므
 #   bash .plan/{plan-name}/plan.sh --from=N --to=M  Step N~M만 실행
 #
 # 주의: --dangerously-skip-permissions를 사용합니다.
-# 반드시 plan.sh를 리뷰한 후 실행하세요.
+# 반드시 steps.json + steps/*.md를 리뷰한 후 실행하세요.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-PLAN_NAME="{plan-name}"
-
 DRY_RUN=false; START_FROM=1; STOP_AFTER=999
-# .plan-state가 있으면 마지막 실패 Step을 기본값으로 사용
 [ -f "$SCRIPT_DIR/.plan-state" ] && START_FROM=$(cat "$SCRIPT_DIR/.plan-state")
 for arg in "$@"; do
   case $arg in
@@ -577,39 +614,41 @@ for arg in "$@"; do
   esac
 done
 
-# ── 하네스 경로 ──
-HARNESS_DIR="$SCRIPT_DIR"
-PLAN_HARNESS="$HARNESS_DIR/harness-for-plan.md"
+PLAN_HARNESS="$SCRIPT_DIR/harness-for-plan.md"
+STEPS_FILE="$SCRIPT_DIR/steps.json"
+STEPS_DIR="$SCRIPT_DIR/steps"
 
-STEP_ACTIVE=false
-step() {
-  local n=$1 name=$2
-  if [ "$n" -gt "$STOP_AFTER" ]; then
-    echo ""; echo "== Done: Step $STOP_AFTER 완료 =="
-    exit 0
-  fi
-  if [ "$n" -lt "$START_FROM" ]; then
-    echo "Skip Step $n: $name"
-    STEP_ACTIVE=false
-    return 0
-  fi
-  echo ""; echo "== Step $n: $name =="
-  STEP_ACTIVE=true
-}
+# ── steps.json → bash 변수 로드 ──
+eval "$(python3 -c "
+import json, shlex
+with open('$STEPS_FILE') as f:
+    data = json.load(f)
+steps = data['steps']
+print(f'STEP_COUNT={len(steps)}')
+for i, s in enumerate(steps):
+    print(f'STEP_{i}_ID={s[\"id\"]}')
+    print(f'STEP_{i}_NAME={shlex.quote(s[\"name\"])}')
+    print(f'STEP_{i}_PROMPT={shlex.quote(s[\"prompt\"])}')
+    print(f'STEP_{i}_COMMIT={shlex.quote(s[\"commit\"])}')
+    vlist = s.get('verify', [])
+    print(f'STEP_{i}_VERIFY_COUNT={len(vlist)}')
+    for j, v in enumerate(vlist):
+        print(f'STEP_{i}_VERIFY_{j}_NAME={shlex.quote(v[\"name\"])}')
+        print(f'STEP_{i}_VERIFY_{j}_RUN={shlex.quote(v[\"run\"])}')
+")"
 
+# ── 공통 함수 ──
 run_claude() {
-  $STEP_ACTIVE || return 0
-  local prompt=$1
-  local step_harness="$HARNESS_DIR/harness-for-step-${CURRENT_STEP}.md"
+  local prompt_file="$STEPS_DIR/$1"
+  local prompt
+  prompt=$(cat "$prompt_file")
 
-  # 하네스 구성: 플랜 + Step별
   local harness=""
   [ -f "$PLAN_HARNESS" ] && harness="$(cat "$PLAN_HARNESS")"
-  [ -f "$step_harness" ] && harness="$harness"$'\n\n'"$(cat "$step_harness")"
 
   if $DRY_RUN; then
-    echo "[DRY] prompt:"; echo "$prompt"; echo ""
-    echo "[DRY] harness: $PLAN_HARNESS + $step_harness"
+    echo "[DRY] prompt ($1):"; echo "$prompt"; echo ""
+    [ -n "$harness" ] && echo "[DRY] harness: $PLAN_HARNESS"
     return 0
   fi
 
@@ -619,7 +658,6 @@ run_claude() {
 }
 
 verify() {
-  $STEP_ACTIVE || return 0
   $DRY_RUN && echo "[DRY] verify: $1" && return 0
   echo "verify: $1"
   eval "$2" || { echo "FAIL: $1"; echo "$CURRENT_STEP" > "$SCRIPT_DIR/.plan-state"; exit 1; }
@@ -627,21 +665,47 @@ verify() {
 }
 
 checkpoint() {
-  $STEP_ACTIVE || return 0
   $DRY_RUN && return 0
-  local step_harness="$HARNESS_DIR/harness-for-step-${CURRENT_STEP}.md"
-  # Step별 하네스에 파일 목록이 있으면 범위 외 변경 경고
-  if [ -f "$step_harness" ] && grep -q '생성할 파일 목록' "$step_harness"; then
-    local unexpected=$(git diff --name-only | grep -v -f <(grep '^\- ' "$step_harness" | sed 's/^- //') 2>/dev/null || true)
+  local step_file="$STEPS_DIR/$CURRENT_PROMPT"
+  if grep -q '생성할 파일 목록' "$step_file" 2>/dev/null; then
+    local unexpected
+    unexpected=$(git diff --name-only | grep -v -f <(grep '^\- ' "$step_file" | sed 's/^- //') 2>/dev/null || true)
     [ -n "$unexpected" ] && echo "WARN: out-of-scope changes: $unexpected"
   fi
   git add -A && git commit -m "$1"
 }
 
 # ── 브랜치 생성 ──
-[ "$START_FROM" -eq 1 ] && ! $DRY_RUN && git checkout -b plan-$(date +%Y%m%d) main 2>/dev/null || true
+[ "$START_FROM" -eq 1 ] && ! $DRY_RUN && git checkout -b "plan-$(date +%Y%m%d)" main 2>/dev/null || true
 
-{각 Step의 코드 블록이 여기에 들어간다}
+# ── Step 루프 ──
+for ((i=0; i<STEP_COUNT; i++)); do
+  eval "STEP_ID=\$STEP_${i}_ID"
+  eval "STEP_NAME=\$STEP_${i}_NAME"
+  eval "STEP_PROMPT=\$STEP_${i}_PROMPT"
+  eval "STEP_COMMIT=\$STEP_${i}_COMMIT"
+  eval "VERIFY_COUNT=\$STEP_${i}_VERIFY_COUNT"
+
+  [ "$STEP_ID" -gt "$STOP_AFTER" ] && echo "" && echo "== Done: Step $STOP_AFTER 완료 ==" && break
+  if [ "$STEP_ID" -lt "$START_FROM" ]; then
+    echo "Skip Step $STEP_ID: $STEP_NAME"
+    continue
+  fi
+
+  echo ""; echo "== Step $STEP_ID: $STEP_NAME =="
+  CURRENT_STEP=$STEP_ID
+  CURRENT_PROMPT=$STEP_PROMPT
+
+  run_claude "$STEP_PROMPT"
+
+  for ((j=0; j<VERIFY_COUNT; j++)); do
+    eval "V_NAME=\$STEP_${i}_VERIFY_${j}_NAME"
+    eval "V_RUN=\$STEP_${i}_VERIFY_${j}_RUN"
+    verify "$V_NAME" "$V_RUN"
+  done
+
+  checkpoint "$STEP_COMMIT"
+done
 
 # ── 완료 ──
 echo ""; echo "Plan complete. Branch: $(git branch --show-current)"
@@ -649,35 +713,7 @@ echo "Next: gh pr create --base main --head $(git branch --show-current)"
 rm -f "$SCRIPT_DIR/.plan-state"
 ```
 
-각 Step은 다음 패턴으로 생성한다:
-
-```bash
-# ── Step N: {이름} ──
-CURRENT_STEP=N; step N "{이름}"
-run_claude "
-## 만들 것
-- {산출물 1} (D-00X)
-- {산출물 2} (D-00Y)
-
-## 하지 않을 것
-- {제외 항목 1} (D-00Z)
-"
-verify "{검증 이름}" "{검증 명령}"
-checkpoint "{커밋 메시지}"
-```
-
-### 프롬프트 작성 원칙
-
-plan.sh에 들어가는 각 Step의 프롬프트(-p)에는 WHAT만 넣는다:
-
-- "만들 것" — 이 Step의 구체적 산출물. 관련 결정 ID를 괄호로 표기.
-- "하지 않을 것" — 이 Step의 범위 외 항목. 관련 결정 ID를 괄호로 표기.
-
-HOW는 하네스에 넣는다:
-- 기술 결정, 코딩 컨벤션 → harness-for-plan.md
-- 이전 Step 상태, 아키텍처 제약, 파일 화이트리스트 → harness-for-step-N.md
-
-프롬프트가 짧을수록 좋다. 기술 결정이나 코딩 규칙을 프롬프트에 반복하지 않는다.
+plan.sh가 분리되는 경우(`plan-1.sh`, `plan-2.sh`), steps.json도 `steps-1.json`, `steps-2.json`으로 분리한다. 각 plan 파일의 `STEPS_FILE` 변수가 대응하는 steps JSON을 가리킨다.
 
 ---
 
@@ -690,19 +726,21 @@ plan.sh가 하나인 경우:
 ```
 생성 완료:
   .plan/{plan-name}/plan-for-human.md          <- 사람 작업 체크리스트
-  .plan/{plan-name}/plan.sh                    <- 에이전트 실행 계획
-  .plan/{plan-name}/harness-for-plan.md        <- 플랜 하네스
-  .plan/{plan-name}/harness-for-step-1.md      <- Step 1 하네스
-  .plan/{plan-name}/harness-for-step-2.md      <- Step 2 하네스
+  .plan/{plan-name}/steps.json                 <- step 매니페스트
+  .plan/{plan-name}/steps/step-1.md            <- Step 1 프롬프트
+  .plan/{plan-name}/steps/step-2.md            <- Step 2 프롬프트
   ...
+  .plan/{plan-name}/harness-for-plan.md        <- 글로벌 하네스
+  .plan/{plan-name}/plan.sh                    <- 실행 러너
 
-다음 단계:
+리뷰 순서:
   1. plan-for-human.md를 읽고 사전 작업을 완료하세요
-  2. plan.sh를 읽고 리뷰하세요
-  3. bash .plan/{plan-name}/plan.sh --dry 로 프롬프트를 미리 확인하세요
-  4. 리뷰 완료 후 bash .plan/{plan-name}/plan.sh 로 실행하세요
-  5. plan-for-human.md의 사후 작업을 수행하세요
-  6. /planosh-calibrate --step=N 으로 발산을 측정하고 하네스를 강화하세요
+  2. steps.json으로 전체 구조를 확인하세요
+  3. steps/*.md로 각 Step 프롬프트를 리뷰하세요
+  4. harness-for-plan.md로 기술 결정을 확인하세요
+  5. bash .plan/{plan-name}/plan.sh --dry 로 최종 확인하세요
+  6. bash .plan/{plan-name}/plan.sh 로 실행하세요
+  7. /planosh-calibrate 로 발산을 측정하고 하네스를 강화하세요
 ```
 
 plan.sh가 분리된 경우:
@@ -710,16 +748,17 @@ plan.sh가 분리된 경우:
 ```
 생성 완료:
   .plan/{plan-name}/plan-for-human.md          <- 사람 작업 체크리스트
-  .plan/{plan-name}/plan-1.sh                  <- 에이전트 실행 (Phase 1)
-  .plan/{plan-name}/plan-2.sh                  <- 에이전트 실행 (Phase 2)
-  .plan/{plan-name}/harness-for-plan.md        <- 플랜 하네스
-  .plan/{plan-name}/harness-for-step-*.md      <- Step별 하네스
-  ...
+  .plan/{plan-name}/steps-1.json               <- Phase 1 step 매니페스트
+  .plan/{plan-name}/steps-2.json               <- Phase 2 step 매니페스트
+  .plan/{plan-name}/steps/step-*.md            <- Step 프롬프트
+  .plan/{plan-name}/harness-for-plan.md        <- 글로벌 하네스
+  .plan/{plan-name}/plan-1.sh                  <- Phase 1 실행 러너
+  .plan/{plan-name}/plan-2.sh                  <- Phase 2 실행 러너
 
-다음 단계:
+리뷰 순서:
   1. plan-for-human.md를 읽고 사전 작업을 완료하세요
-  2. bash .plan/{plan-name}/plan-1.sh --dry -> 리뷰 -> bash .plan/{plan-name}/plan-1.sh
+  2. bash .plan/{plan-name}/plan-1.sh --dry -> 리뷰 -> 실행
   3. plan-for-human.md의 중간 작업을 수행하세요
-  4. bash .plan/{plan-name}/plan-2.sh --dry -> 리뷰 -> bash .plan/{plan-name}/plan-2.sh
+  4. bash .plan/{plan-name}/plan-2.sh --dry -> 리뷰 -> 실행
   5. plan-for-human.md의 사후 작업을 수행하세요
 ```

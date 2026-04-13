@@ -44,12 +44,17 @@ PLAN_SH=".plan/$PLAN_NAME/plan.sh"
 
 ### 0-2. Step 목록 추출
 
-`$PLAN_SH`에서 `CURRENT_STEP=N; step N "이름"` 패턴을 파싱하여 전체 Step 목록을 추출한다.
+`.plan/$PLAN_NAME/steps.json`에서 Step 목록을 읽는다.
+
+```bash
+STEPS_FILE=".plan/$PLAN_NAME/steps.json"
+[ -f "$STEPS_FILE" ] || { echo "$STEPS_FILE을 찾을 수 없습니다."; exit 1; }
+```
 
 파싱 결과를 사용자에게 보여준다:
 
 ```
-.plan/{plan-name}/plan.sh에서 N개 Step을 감지했습니다:
+.plan/{plan-name}/steps.json에서 N개 Step을 감지했습니다:
   Step 1: 프로젝트 스캐폴딩
   Step 2: DB 스키마 + API
   Step 3: 인증
@@ -214,17 +219,32 @@ Step M: {이름} — {N}건 발산
 
 ### 1-7. 하네스 업데이트
 
-사용자 결정을 하네스 규칙으로 변환한다.
+사용자 결정을 하네스 규칙으로 변환한다. step 수준 규칙은 해당 step의 프롬프트 파일(`steps/step-M.md`)에 직접 추가한다.
 
-| 발산 유형 | 하네스 위치 | 규칙 형태 |
+| 발산 유형 | 기록 위치 | 규칙 형태 |
 |----------|-----------|----------|
-| 구조 발산 | harness-for-step-M.md | "생성할 파일 목록"에 추가/제거 |
-| 패턴 발산 | harness-for-step-M.md | "아키텍처 제약"에 규칙 추가 |
+| 구조 발산 | steps/step-M.md | `## 생성할 파일 목록` 섹션에 추가/제거 |
+| 패턴 발산 | steps/step-M.md | `## 아키텍처 제약` 섹션에 규칙 추가 |
 | 네이밍 발산 | harness-for-plan.md | "코딩 규칙"에 컨벤션 추가 |
-| 범위 발산 | harness-for-step-M.md 또는 harness-for-plan.md | "절대 금지"에 항목 추가 |
+| 범위 발산 | steps/step-M.md 또는 harness-for-plan.md | "절대 금지"에 항목 추가 |
+
+step 프롬프트 파일에 calibrate 섹션을 추가하는 형식:
+
+```markdown
+{기존 프롬프트 내용 — 만들 것, 하지 않을 것}
+
+<!-- calibrate에 의해 추가됨 -->
+## 아키텍처 제약
+- {패턴 발산에서 결정된 규칙}
+
+## 생성할 파일 목록 (이 목록 외 파일 생성 금지)
+- {구조 발산에서 확정된 파일 경로}
+```
+
+이미 `<!-- calibrate에 의해 추가됨 -->` 마커가 있으면, 해당 마커 이후 내용을 교체한다.
 
 주의:
-- 기존 규칙을 삭제하지 않는다. 추가만 한다.
+- 기존 프롬프트(만들 것, 하지 않을 것)는 수정하지 않는다. calibrate 마커 이후만 관리한다.
 - 기존 규칙과 모순되면 사용자에게 알리고 결정받는다.
 
 ### 1-8. 재검증
@@ -232,7 +252,8 @@ Step M: {이름} — {N}건 발산
 하네스 업데이트 후 사용자에게 확인:
 
 ```
-Step M 하네스를 업데이트했습니다. ({N}건 규칙 추가)
+Step M 프롬프트를 업데이트했습니다. ({N}건 규칙 추가)
+  수정: .plan/{plan-name}/steps/step-M.md
 재실행하여 수렴을 확인할까요? (Y/건너뛰기)
 ```
 
@@ -294,8 +315,8 @@ for i in $(seq 1 $RUNS); do rm -rf "$TESTBED_DIR/run-$i"; done
 - 사용자 결정:
   - 세션 전략 → JWT
   - 설정 변수명 → authConfig
-- 하네스 변경:
-  - harness-for-step-2.md: 아키텍처 제약 1건 추가
+- 변경된 파일:
+  - steps/step-2.md: 아키텍처 제약 1건 추가
   - harness-for-plan.md: 코딩 규칙 1건 추가
 
 ### Step 3: {이름}
@@ -326,11 +347,11 @@ rm -rf "$TESTBED_DIR"
 교정 완료:
   교정 Step: {from}~{last} ({N}개 Step)
   발산 총합: {N}건 발견, {M}건 해결
-  하네스 변경: {파일 목록}
+  변경된 파일: {파일 목록}
   리포트: .plan/{plan-name}/calibration-report.md
 
 다음 단계:
-  1. 변경된 하네스를 확인하세요
+  1. 변경된 steps/*.md를 확인하세요 (calibrate 마커 이후 추가된 제약)
   2. bash .plan/{plan-name}/plan.sh --dry 로 프롬프트를 확인하세요
   3. bash .plan/{plan-name}/plan.sh 로 실제 실행하세요
 ```
@@ -338,6 +359,6 @@ rm -rf "$TESTBED_DIR"
 모든 Step이 첫 실행에서 수렴한 경우:
 
 ```
-전 Step 수렴! 하네스가 충분히 결정적입니다.
+전 Step 수렴! 프롬프트가 충분히 결정적입니다.
 추가 교정이 필요하지 않습니다.
 ```

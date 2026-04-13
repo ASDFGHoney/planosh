@@ -131,7 +131,7 @@ planosh is a proposal, not a finished framework. We're building patterns and bes
 
 That said, there's active development ahead on two fronts:
 
-- **plan.sh readability** &mdash; plan.sh is a shell script, and shell scripts get ugly fast. We're working on making plans easier to read and write without sacrificing determinism.
+- **plan.sh readability** &mdash; plan.sh is now a generic runner that reads from `steps.json` and `steps/*.md`. Prompts live in readable Markdown files, not inline bash strings.
 - **`planosh run`** &mdash; a CLI that spins up N isolated testbeds with shim-git and runs `plan.sh` in parallel. This is the execution environment that makes calibration (`--mode calibrate`) and internal parallelism (`--mode split`) real. See [#1](https://github.com/ASDFGHoney/planosh/issues/1) and [#2](https://github.com/ASDFGHoney/planosh/issues/2).
 
 Both are open for contribution.
@@ -144,8 +144,11 @@ The `.plan/` directory in this repo is the community's best practice collection.
 .plan/
 +-- your-plan-name/
     +-- plan.sh
+    +-- steps.json
+    +-- steps/
+    |   +-- step-1.md
+    |   +-- step-2.md
     +-- harness-for-plan.md
-    +-- harness-for-step-N.md (optional)
     +-- README.md
 ```
 

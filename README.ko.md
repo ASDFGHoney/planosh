@@ -122,7 +122,7 @@ planosh는 완성된 프레임워크가 아니라 제안이다. 패턴과 모범
 
 다만 두 가지 방향에서 추가 개발이 이어진다:
 
-- **plan.sh 가독성** &mdash; plan.sh는 셸 스크립트고, 셸 스크립트는 금방 지저분해진다. 결정성을 깨지 않으면서 플랜을 읽고 쓰기 쉽게 만드는 작업을 진행 중이다.
+- **plan.sh 가독성** &mdash; plan.sh는 이제 `steps.json`과 `steps/*.md`를 읽는 범용 러너다. 프롬프트가 읽기 쉬운 마크다운 파일로 분리되어 bash 문자열 인라인 문제를 해결했다.
 - **`planosh run`** &mdash; shim-git 기반 격리 testbed N개를 띄우고 `plan.sh`를 병렬 실행하는 CLI. 교정(`--mode calibrate`)과 내부 병렬 실행(`--mode split`)을 실제로 가능하게 만드는 실행 환경이다. [#1](https://github.com/ASDFGHoney/planosh/issues/1)과 [#2](https://github.com/ASDFGHoney/planosh/issues/2) 참고.
 
 둘 다 기여를 받고 있다.
@@ -135,8 +135,11 @@ planosh는 완성된 프레임워크가 아니라 제안이다. 패턴과 모범
 .plan/
   your-plan-name/
     plan.sh
+    steps.json
+    steps/
+      step-1.md
+      step-2.md
     harness-for-plan.md
-    harness-for-step-N.md (선택)
     README.md
 ```
 
