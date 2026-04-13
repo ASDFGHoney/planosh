@@ -45,3 +45,98 @@
 - **Pros:** 플랫폼 종속 탈피. 프로젝트별 커스텀이 업데이트에 안전. planosh 철학(결정성, 사용자 결정)이 배포/업데이트에도 일관되게 적용.
 - **Cons:** 플랫폼 어댑터 유지보수 부담. 3-way diff 구현 복잡도. 플랫폼별 스킬 포맷이 바뀌면 어댑터도 갱신 필요.
 - **Depends on:** 스킬이 안정화된 후 (v0.3.0+). 플랫폼별 스킬 포맷 리서치 선행.
+
+## TODO-005: Testbed/Calibrate 실행 진행과정 가시성
+
+- **Phase 1 완료** (2026-04-13): 에이전트 4개 분해 + --testbed 플래그
+  - `skills/planosh/SKILL.md`: plan.sh 템플릿에 `--testbed` 플래그 추가 (Haiku 모델 사용)
+  - `skills/planosh-calibrate/SKILL.md`: orchestrator + testbed-run + diff-collector + harness-patch 에이전트 분해 아키텍처로 재작성
+  - 에이전트 프롬프트 템플릿 3개 정의 (구조화된 보고 형식 포함)
+  - 병렬 스폰 패턴 (Agent × N, run_in_background) + 진행 상황 표시 포맷
+- **What:** calibrate나 testbed 실행 중 진행 상황을 실시간으로 보여주는 메커니즘. 코드 변경사항 통계(`+1234 -234`), 현재 Step, 수렴/발산 상태 등을 스트리밍으로 표시.
+- **Why:** 현재 calibrate는 에이전트를 스폰해서 진행하는데, 내부에서 뭘 하고 있는지 전혀 보이지 않음. 사용자가 "돌아가고 있긴 한 건가?" 상태로 대기해야 하는 것은 UX 치명적.
+- **표시 항목 (안):**
+  - 현재 실행 중인 Step 번호/이름
+  - 코드 변경 통계: `+1234 -234` (git diff --stat 스타일, 실시간 증가)
+  - 하네스 규칙 추가/수정 카운트
+  - 수렴률 변화: `72% → 85% → 100%`
+  - 소요 시간 / 반복 횟수
+- **Phase 1 (CLI 이전) — 에이전트 4개 분해:**
+
+  ### 1. `planosh-testbed-run` — 단일 testbed 실행기
+  - **역할:** testbed/run-i 에서 plan.sh --from=M --to=M **--testbed** 실행
+  - **왜 분리:** 병렬 스폰 단위. N개가 동시에 떠야 하므로 독립 에이전트 필수
+  - **입력:** testbed 경로, plan.sh 경로, Step 번호
+  - **출력:** 실행 결과 + 변경 통계
+  - **중간 보고 (SendMessage → orchestrator):**
+    - "run-2: claude 호출 시작"
+    - "run-2: +347 -12 (src/lib/ 4파일)"
+    - "run-2: verify 2/3 통과"
+    - "run-2: checkpoint 완료"
+  - 실패 시 에러 컨텍스트 전달
+
+  ### plan.sh `--testbed` 모드
+  - **What:** plan.sh에 `--testbed` 플래그를 추가하여 `run_claude`의 `claude -p` 호출 시 `--model haiku` 사용
+  - **Why:** calibrate의 목적은 발산 패턴 탐지이지 최고 품질 코드 생성이 아님. N회 × M스텝 × claude 호출이 전부 Opus로 돌면 비용이 과도. Haiku로도 발산 패턴은 동일하게 드러남.
+  - **근거:** 하이쿠에서 수렴하면 → Opus는 당연히 수렴. 하이쿠에서 발산하면 → 하네스 부족 신호. 탐지 목적에 정확히 부합.
+  - **구현 (안):**
+    ```bash
+    # plan.sh 상단
+    TESTBED=false
+    # 플래그 파싱에 추가
+    --testbed) TESTBED=true ;;
+    
+    # run_claude 함수 내
+    MODEL_FLAG=""
+    $TESTBED && MODEL_FLAG="--model haiku"
+    
+    claude -p "$prompt" \
+      $MODEL_FLAG \
+      --append-system-prompt "$harness" \
+      --dangerously-skip-permissions
+    ```
+  - **testbed-run 에이전트가 하는 일:** `bash plan.sh --from=M --to=M --testbed` 호출. 에이전트 자체 모델은 기본(Opus/Sonnet) 유지 — 판단력이 아니라 실행+보고 역할이므로 에이전트 모델은 무관.
+
+  ### 2. `planosh-diff-collector` — 결과 수집 + 발산 분류
+  - **역할:** 각 run의 diff를 수집하고 발산을 AI 분류
+  - **왜 분리:** 비교 로직이 무거움. run이 많을수록 diff 양이 커서 orchestrator 컨텍스트 오염 방지
+  - **입력:** testbed/run-1..N 경로
+  - **출력:** 파일 존재 매트릭스 + 발산 분류 테이블 (패턴/네이밍/범위) + 수렴 판정
+  - **중간 보고:**
+    - "3개 run 수집 완료, 파일 12개 비교 중"
+    - "발산 2건 감지: 패턴 1, 네이밍 1"
+
+  ### 3. `planosh-harness-patch` — 하네스 규칙 작성기
+  - **역할:** 사용자 결정을 하네스 규칙으로 변환하여 파일 수정
+  - **왜 분리:** 하네스 수정은 정밀해야 하고, orchestrator 컨텍스트가 비교 결과로 이미 커져있을 때 깨끗한 컨텍스트에서 수행
+  - **입력:** 사용자 결정 목록 + 현재 하네스 파일들
+  - **출력:** 수정된 하네스 파일들 + 변경 diff 리포트
+  - 기존 규칙과 충돌 검사 포함
+
+  ### 4. `planosh-calibrate-orchestrator` — 전체 조율 (기존 calibrate 스킬 리팩토링)
+  - **역할:** 위 3개 에이전트를 스폰하고 조율. 사용자 대화 담당.
+  - **직접 수행:** Phase 0 (plan.sh 파싱, golden 초기화), testbed 생성, 사용자 결정 대화, golden 업데이트, 리포트 생성
+  - **에이전트 스폰:**
+    - Phase 1-2: `planosh-testbed-run` × N 병렬 스폰 → 각 run에서 SendMessage로 progress 수신
+    - Phase 1-3~4: `planosh-diff-collector` 스폰
+    - Phase 1-7: `planosh-harness-patch` 스폰
+  - **사용자에게 종합 표시:**
+    ```
+    ┌─────────────────────────────────┐
+    │ Step 3 교정 (3회 실행)          │
+    │ run-1: ✅ +347 -12  2m 13s      │
+    │ run-2: ⏳ +198 -8   (진행 중)   │
+    │ run-3: ⏳ claude 호출 중         │
+    └─────────────────────────────────┘
+    ```
+
+  ### 별도 에이전트로 안 만드는 것
+  - **golden-updater:** patch apply + git commit 한 줄이라 에이전트 오버헤드가 더 큼
+  - **report-generator:** orchestrator가 이미 모든 데이터를 갖고 있으므로 직접 작성이 효율적
+  - **재검증 전용:** testbed-run을 재사용하면 됨
+
+- **Phase 2 (CLI):** `planosh` CLI에서 터미널 TUI로 실시간 progress bar, diff stat 스트리밍 제공. `planosh calibrate --progress` 같은 플래그.
+  - CLI TUI 프레임워크 선택: ink (React for CLI)? blessed? 직접 ANSI?
+- **Pros:** 사용자 신뢰도 증가. 문제 발생 시 어디서 멈췄는지 즉시 파악 가능. calibrate 도중 방향 수정 가능.
+- **Cons:** 에이전트 스킬 방식은 SendMessage 오버헤드. CLI TUI는 구현 복잡도.
+- **Depends on:** TODO-004 (CLI)와 병렬 진행 가능. Phase 1은 지금 바로 시작 가능.

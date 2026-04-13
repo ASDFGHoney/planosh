@@ -595,6 +595,7 @@ plan.sh는 **범용 러너**다. step-specific 코드를 포함하지 않는다.
 #   bash .plan/{plan-name}/plan.sh --from=N         Step N부터 재개
 #   bash .plan/{plan-name}/plan.sh --to=M           Step M까지만 실행
 #   bash .plan/{plan-name}/plan.sh --from=N --to=M  Step N~M만 실행
+#   bash .plan/{plan-name}/plan.sh --testbed          calibrate용 경량 모드 (Haiku)
 #
 # 주의: --dangerously-skip-permissions를 사용합니다.
 # 반드시 steps.json + steps/*.md를 리뷰한 후 실행하세요.
@@ -604,13 +605,14 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
-DRY_RUN=false; START_FROM=1; STOP_AFTER=999
+DRY_RUN=false; START_FROM=1; STOP_AFTER=999; TESTBED=false
 [ -f "$SCRIPT_DIR/.plan-state" ] && START_FROM=$(cat "$SCRIPT_DIR/.plan-state")
 for arg in "$@"; do
   case $arg in
     --dry) DRY_RUN=true ;;
     --from=*) START_FROM="${arg#*=}" ;;
     --to=*) STOP_AFTER="${arg#*=}" ;;
+    --testbed) TESTBED=true ;;
   esac
 done
 
@@ -649,10 +651,15 @@ run_claude() {
   if $DRY_RUN; then
     echo "[DRY] prompt ($1):"; echo "$prompt"; echo ""
     [ -n "$harness" ] && echo "[DRY] harness: $PLAN_HARNESS"
+    $TESTBED && echo "[DRY] model: haiku (testbed mode)"
     return 0
   fi
 
+  local model_flag=""
+  $TESTBED && model_flag="--model haiku"
+
   claude -p "$prompt" \
+    $model_flag \
     --append-system-prompt "$harness" \
     --dangerously-skip-permissions
 }
