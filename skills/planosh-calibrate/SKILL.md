@@ -53,9 +53,9 @@ orchestrator (이 스킬)
 planosh calibrate testbed 실행기.
 
 실행할 작업:
-1. 디렉토리 이동 후 plan.sh를 실행한다:
+1. 디렉토리 이동 후 plan.sh를 **절대 경로**로 실행한다:
    cd {TESTBED_DIR}/run-{i}
-   bash {PLAN_SH_REL_PATH} --from={M} --to={M} --testbed
+   bash {PLAN_SH_ABS_PATH} --from={M} --to={M} --testbed
 
 2. plan.sh가 내부적으로 claude -p를 호출한다.
    --testbed 플래그에 의해 --model haiku가 사용된다.
@@ -342,7 +342,7 @@ Agent({
 
 **변수 치환 규칙:**
 - `{TESTBED_DIR}` → 실제 testbed 절대 경로
-- `{PLAN_SH_REL_PATH}` → plan.sh의 testbed run 디렉토리 기준 상대 경로. 예: run 디렉토리가 `.plan/myplan/testbed/run-1`이고 plan.sh가 `.plan/myplan/plan.sh`이면, 상대 경로는 `../../plan.sh`. `$PLAN_SH` 경로에서 계산한다.
+- `{PLAN_SH_ABS_PATH}` → **testbed run 디렉토리 안의** plan.sh 절대 경로. 예: `{TESTBED_DIR}/run-1/.plan/myplan/plan.sh`. 주 plan.sh가 아니라 testbed에 복사된 plan.sh를 가리켜야 한다 — 그래야 `SCRIPT_DIR`이 testbed 안의 `.plan/`으로 해석되고, `PROJECT_ROOT`가 testbed run 디렉토리로 올바르게 계산된다.
 - `{M}` → 현재 Step 번호
 - `{i}` → run 번호 (1, 2, ..., N)
 

@@ -193,3 +193,63 @@
   - [ ] 중첩 병렬 시나리오 동작 검증
   - [ ] 재시도 경로가 calibrate 발산 시그널에 미치는 영향 측정
 - **Depends on:** TODO-006 (`planosh run` + shim-git). DESIGN.md 규칙 2(수렴 루프).
+
+## TODO-008: CLI 구조-중립 설계 — 프로젝트 레이아웃에 의존하지 않는 `.plan/` 발견 규칙
+
+- **What:** CLI가 single repo, monorepo, submodule, codespace 등 어떤 코드 관리 방식에서도 동일하게 작동하도록 `.plan/` 위치 발견 규칙과 PROJECT_ROOT 계산 방식을 확정.
+- **Why:** 팀마다 코드 관리 방식이 전부 다르다. monorepo에서 `apps/web/.plan/`에 plan을 두는 팀, submodule 안에 `.plan/`을 넣는 팀, codespace에서 clone 후 harness로 감싸는 팀 등. CLI가 특정 구조를 가정하면 그 순간 범용성이 깨진다.
+- **현재 문제:**
+  - `PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"` — 2단계 상위로 올라가는 하드코딩. `.plan/`이 repo root에 있다는 가정.
+  - verify 커맨드의 실행 디렉토리가 암묵적으로 repo root.
+  - monorepo에서 package 단위 plan을 지원하지 못함.
+- **설계 원칙: ".plan/의 부모가 곧 PROJECT_ROOT"**
+  ```
+  planosh CLI
+    ├── 발견 계층 (Discovery)
+    │   ├── .plan/ 위치를 cwd → git root 방향으로 탐색
+    │   ├── 없으면 cwd 기준으로 생성
+    │   └── PROJECT_ROOT = .plan/의 직접 부모 (항상 동적 계산)
+    │
+    ├── 실행 계층 (Execution)
+    │   ├── cwd = PROJECT_ROOT로 고정
+    │   ├── verify 커맨드는 PROJECT_ROOT에서 실행
+    │   └── claude -p도 PROJECT_ROOT에서 실행
+    │
+    └── 격리 계층 (Isolation)
+        ├── plan 산출물은 전부 .plan/{name}/ 안에
+        ├── .plan-state도 .plan/{name}/ 안에
+        └── repo의 다른 파일에 절대 기록하지 않음
+  ```
+- **plan.sh 변경점:**
+  ```bash
+  # AS-IS: 구조 가정 (2단계 상위)
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+  # TO-BE: .plan/의 부모가 곧 root
+  PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+  ```
+- **시나리오별 동작:**
+  - monorepo `apps/web/.plan/auth-plan/` → PROJECT_ROOT = `apps/web/`
+  - single repo `.plan/mvp/` → PROJECT_ROOT = repo root
+  - submodule `libs/shared/.plan/refactor/` → PROJECT_ROOT = `libs/shared/`
+  - codespace `/workspaces/myapp/.plan/sprint-3/` → 그냥 작동
+- **Pros:** 구조 중립. 팀이 기존 방식을 바꿀 필요 없음. plan.sh 변경은 1줄.
+- **Cons:** monorepo에서 여러 `.plan/`이 중첩될 경우 탐색 우선순위 정의 필요.
+- **산출물:**
+  - [ ] plan.sh 템플릿의 PROJECT_ROOT 계산 변경
+  - [ ] CLI의 `.plan/` 발견 알고리즘 (cwd → 상위 탐색, 중첩 시 가장 가까운 것 우선)
+  - [ ] 시나리오별 동작 검증 (monorepo, submodule, codespace)
+  - [ ] `/planosh` 스킬의 plan.sh 생성 로직에 반영
+- **Depends on:** TODO-004 (CLI). TODO-006과 연관 (testbed 격리 시에도 동일 규칙 적용).
+
+## TODO-009: testbed 자기참조 문제 — testbed 경로를 plan 디렉토리 밖으로 분리
+
+- **What:** calibrate의 testbed 디렉토리가 `$PLAN_DIR/testbed` (= `.plan/<name>/testbed/`)에 생성되는데, plan 파일을 golden에 `cp -r`로 복사할 때 testbed 자체가 재귀적으로 포함되는 자기참조 문제.
+- **Why:** `.plan/<name>/` 안에 testbed가 있으면 plan 파일을 golden에 복사할 때 `cp -r`이 testbed까지 딸려 보낸다. `.gitignore`에 testbed를 추가해도 `cp -r`은 gitignore를 무시하므로 해결 안 됨. 현재 calibrate SKILL.md에 `echo "testbed/" >> "$PLAN_DIR/.gitignore"` 코드가 있지만 git clone 단계에만 효과가 있고, 이후 cp -r 단계에서는 무력.
+- **현상:** golden clone 내부의 `.plan/<name>/`에 `testbed/` 디렉토리가 잔류. 재귀 복사 중 깊은 경로에서 에러 발생.
+- **해결 방안 비교:**
+  1. `rsync --exclude=testbed` — 최소 변경이지만 증상 치료. 제외 대상이 늘면 exclude 누적.
+  2. 선택적 cp (개별 파일 복사) — 외부 의존 없지만 plan 구조 변경 시 복사 목록 수동 갱신 필요.
+  3. **testbed 경로를 plan 밖으로 분리** (추천) — `TESTBED_DIR=".testbed/$PLAN_NAME"` 등으로 변경. 자기참조 원천 차단. cp/rsync 어떤 방식이든 문제 없음.
+- **변경 범위:** `skills/planosh-calibrate/SKILL.md`의 `TESTBED_DIR` 정의 + 참조 경로 전체. `.testbed/`를 root `.gitignore`에 추가.
+- **Depends on:** 없음 (독립 수정 가능). TODO-006 (shim-git testbed)과 연관 — testbed 경로 규칙 통일 필요.

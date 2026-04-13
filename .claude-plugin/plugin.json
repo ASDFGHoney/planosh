@@ -1,6 +1,6 @@
 {
   "name": "planosh",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "플랜-코드 갭을 결정성으로 좁힌다. PRD → plan.sh + 하네스 + calibration.",
   "author": {
     "name": "graphicchiheon"

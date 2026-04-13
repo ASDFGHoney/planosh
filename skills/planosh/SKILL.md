@@ -636,13 +636,27 @@ plan.sh는 **범용 러너**다. step-specific 코드를 포함하지 않는다.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# .plan/{name}/plan.sh → .plan/의 부모가 PROJECT_ROOT
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
+
+# 안전장치: PROJECT_ROOT에 .plan/ 또는 .git이 존재하는지 확인
+if [ ! -d "$PROJECT_ROOT/.plan" ] && [ ! -d "$PROJECT_ROOT/.git" ]; then
+  echo "ERROR: PROJECT_ROOT($PROJECT_ROOT)에 .plan/ 또는 .git이 없습니다."
+  echo "plan.sh가 올바른 위치에서 실행되고 있는지 확인하세요."
+  exit 1
+fi
 
 DRY_RUN=false; START_FROM=1; STOP_AFTER=999; TESTBED=false
 DEFAULT_MODEL="{chosen-model}"; DEFAULT_EFFORT="{chosen-effort}"
 MODEL="$DEFAULT_MODEL"; EFFORT="$DEFAULT_EFFORT"
 [ -f "$SCRIPT_DIR/.plan-state" ] && START_FROM=$(cat "$SCRIPT_DIR/.plan-state")
+
+# 경로 셀프테스트: SCRIPT_DIR이 .plan/ 안에 있는지 확인
+case "$SCRIPT_DIR" in
+  */.plan/*) ;; # 정상
+  *) echo "WARN: SCRIPT_DIR($SCRIPT_DIR)이 .plan/ 안에 있지 않습니다" ;;
+esac
 for arg in "$@"; do
   case $arg in
     --dry) DRY_RUN=true ;;
@@ -707,7 +721,7 @@ run_claude() {
 verify() {
   $DRY_RUN && echo "[DRY] verify: $1" && return 0
   echo "verify: $1"
-  eval "$2" || { echo "FAIL: $1"; echo "$CURRENT_STEP" > "$SCRIPT_DIR/.plan-state"; exit 1; }
+  ( eval "$2" ) || { echo "FAIL: $1"; echo "$CURRENT_STEP" > "$SCRIPT_DIR/.plan-state"; exit 1; }
   echo "PASS: $1"
 }
 
