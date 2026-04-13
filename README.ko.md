@@ -81,18 +81,11 @@ checkpoint "feat: Google OAuth login"
 
 planosh는 3개 레이어로 AI 실행을 제약한다:
 
-```
-┌─────────────────────────────────────────────────────┐
-│ Layer 1: 시스템 프롬프트 (--append-system-prompt)    │
-│ HOW — 코딩 컨벤션, 아키텍처 규칙, 금지 패턴          │
-├─────────────────────────────────────────────────────┤
-│ Layer 2: 유저 프롬프트 (-p)                          │
-│ WHAT — 만들 것, 하지 않을 것, 선행 조건               │
-├─────────────────────────────────────────────────────┤
-│ Layer 3: 검증 (verify)                              │
-│ CHECK — 빌드, 파일 존재, 테스트 통과                  │
-└─────────────────────────────────────────────────────┘
-```
+| Layer | 역할 | 제약 |
+|-------|------|------|
+| **Layer 1: 시스템 프롬프트** (`--append-system-prompt`) | HOW — 코딩 컨벤션, 아키텍처 규칙, 금지 패턴 | "어떻게 만들지"를 제약 |
+| **Layer 2: 유저 프롬프트** (`-p`) | WHAT — 만들 것, 하지 않을 것, 선행 조건 | "무엇을 만들지"를 제약 |
+| **Layer 3: 검증** (`verify`) | CHECK — 빌드, 파일 존재, 테스트 통과 | 결과가 제약에 부합하는지 사후 확인 |
 
 WHAT(프롬프트)과 HOW(하네스)가 동시에 제약되면 해의 공간이 극적으로 좁아진다. 마크다운 명세를 AI가 읽는 5단계 변환(spec &rarr; plan &rarr; tasks &rarr; sessions &rarr; code)이 1단계(prompt &rarr; code)로 압축된다.
 
@@ -140,11 +133,11 @@ planosh는 완성된 프레임워크가 아니라 제안이다. 패턴과 모범
 
 ```
 .plan/
-└── your-plan-name/
-    ├── plan.sh
-    ├── harness-global.md
-    ├── harness-step-N.md (선택)
-    └── README.md
+  your-plan-name/
+    plan.sh
+    harness-global.md
+    harness-step-N.md (선택)
+    README.md
 ```
 
 README에 포함할 내용:
