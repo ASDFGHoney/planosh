@@ -1,34 +1,32 @@
 ---
 name: planosh-calibrate
-description: plan.sh를 병렬 실행하여 발산 지점을 찾고 하네스를 강화. "calibrate", "발산 측정", "하네스 강화", "/planosh-calibrate" 등의 요청에 사용.
+description: plan.sh의 각 Step을 순차적으로 교정하여 하네스를 강화. "calibrate", "하네스 강화", "/planosh-calibrate" 등의 요청에 사용.
 ---
 
-# /planosh-calibrate — 발산 탐지 및 하네스 강화
+# /planosh-calibrate — Step별 순차 수렴
 
-plan.sh를 격리된 환경에서 N번 병렬 실행하고, 발산 지점을 찾아 사용자에게 결정을 요청한 뒤, 그 결정을 하네스에 추가한다.
+plan.sh의 각 Step을 순서대로 N번 병렬 실행하여, 해당 Step이 수렴할 때까지 하네스를 강화한 뒤 다음 Step으로 넘어간다.
 
 ```
-/planosh-calibrate [--step=M] [--runs=N]
+/planosh-calibrate [--from=M] [--runs=N]
 
 입력: plan.sh + 기존 하네스
-과정: 병렬 실행 → 발산 분석 → 사용자에게 결정 요청 → 하네스 업데이트
-출력: 강화된 하네스 + .plan/{plan-name}/divergence-report.md
+과정: Step 1 교정 → 수렴 → Step 2 교정 → 수렴 → ... → 전체 완료
+출력: 강화된 하네스 + .plan/{plan-name}/calibration-report.md
 ```
 
-기본값: `--runs=3`. `--step`을 생략하면 전체 plan.sh를 실행한다.
+기본값: `--runs=3`, `--from=1`.
 
 ## 전제 조건
 
 - `plan.sh`가 현재 프로젝트에 존재해야 한다
 - plan.sh 내부의 `PLAN_NAME` 변수를 읽어 `.plan/{plan-name}/` 디렉토리를 특정한다
-- `--step=M`을 사용할 경우, Step M-1까지 완료된 커밋이 현재 브랜치에 있어야 한다
+- `--from=M`(M≥2)을 사용할 경우, Step M-1까지 완료된 커밋이 현재 브랜치에 있어야 한다
 - v0 제약: 포트나 DB를 사용하는 verify가 있으면 병렬 실행 시 충돌할 수 있다. 빌드/파일 검증만 있는 plan.sh에서 가장 안전하다.
 
-## Phase 1: 격리 환경 생성 및 병렬 실행
+## Phase 0: 사전 검증 + Step 파싱
 
-### 1-1. 사전 검증
-
-plan.sh에서 `PLAN_NAME`을 읽고, 해당 하네스 디렉토리가 존재하는지 확인한다.
+### 0-1. plan.sh 검증
 
 ```bash
 [ -f plan.sh ] || { echo "plan.sh를 찾을 수 없습니다."; exit 1; }
@@ -37,104 +35,153 @@ PLAN_NAME=$(grep '^PLAN_NAME=' plan.sh | head -1 | cut -d'"' -f2)
 [ -d ".plan/$PLAN_NAME" ] || { echo ".plan/$PLAN_NAME/ 디렉토리를 찾을 수 없습니다."; exit 1; }
 ```
 
-`--step=M` 옵션이 있으면, plan.sh에서 해당 Step이 존재하는지 확인한다.
+### 0-2. Step 목록 추출
 
-### 1-2. testbed 생성 (clone 방식)
+plan.sh에서 `CURRENT_STEP=N; step N "이름"` 패턴을 파싱하여 전체 Step 목록을 추출한다.
 
-N개의 격리된 clone을 `.plan/$PLAN_NAME/testbed/`에 생성한다.
+파싱 결과를 사용자에게 보여준다:
+
+```
+plan.sh에서 N개 Step을 감지했습니다:
+  Step 1: 프로젝트 스캐폴딩
+  Step 2: DB 스키마 + API
+  Step 3: 인증
+  ...
+
+Step 1부터 순차 교정을 시작합니다.
+```
+
+### 0-3. 골든 베이스 초기화
+
+`.plan/$PLAN_NAME/testbed/golden`에 현재 repo의 clone을 생성한다. 골든 베이스는 수렴된 각 Step의 결과를 누적하여, 다음 Step 교정의 출발점이 된다.
 
 ```bash
 TESTBED_DIR=".plan/$PLAN_NAME/testbed"
 REPO_ROOT=$(git rev-parse --show-toplevel)
 rm -rf "$TESTBED_DIR"
 mkdir -p "$TESTBED_DIR"
+git clone --depth 1 "file://$REPO_ROOT" "$TESTBED_DIR/golden"
+```
 
+`--from=M`(M≥2)인 경우, 현재 브랜치에 Step 1..M-1의 커밋이 있으므로 golden base에도 그 상태가 반영된다.
+
+`testbed/`는 `.gitignore`에 추가:
+```bash
+grep -q 'testbed/' ".plan/$PLAN_NAME/.gitignore" 2>/dev/null || echo "testbed/" >> ".plan/$PLAN_NAME/.gitignore"
+```
+
+## Phase 1: Step M 교정 (각 Step에 대해 반복)
+
+Step `--from`부터 마지막 Step까지 순차적으로 진행한다.
+
+```
+┌─ 1-1. testbed 생성 (golden → N개 clone) ◀──────────┐
+│                                                       │
+├─ 1-2. 병렬 실행 (Step M만)                            │
+│                                                       │
+├─ 1-3. 결과 수집                                       │
+│                                                       │
+├─ 1-4. 발산 분석                                       │
+│                                                       │
+├─ 1-5. 수렴 판정                                       │
+│   ├─ 수렴 → Phase 2로                                 │
+│   └─ 발산 → 1-6으로                                   │
+│                                                       │
+├─ 1-6. 사용자 결정 요청                                │
+│                                                       │
+├─ 1-7. 하네스 업데이트                                 │
+│                                                       │
+└─ 1-8. 재검증 ─────────────────────────────────────────┘
+```
+
+### 1-1. testbed 생성
+
+golden base에서 N개 clone을 생성한다.
+
+```bash
 for i in $(seq 1 $RUNS); do
-  git clone --depth 1 "file://$REPO_ROOT" "$TESTBED_DIR/run-$i"
+  cp -r "$TESTBED_DIR/golden" "$TESTBED_DIR/run-$i"
 done
 ```
 
-- `file://` 프로토콜로 로컬 clone → 네트워크 불필요, 빠름
-- `--depth 1`로 히스토리 최소화
-- 각 clone은 완전 독립 → `.git` lock 경합 없음, 병렬 안전
-- `.plan/$PLAN_NAME/` 디렉토리가 tracked 상태가 아니면 각 clone에 수동 복사한다
+`cp -r` 사용: golden base는 이미 로컬 clone이므로, 다시 git clone보다 빠르다.
 
-`testbed/`는 `.gitignore`에 추가하여 repo에 포함되지 않게 한다:
+plan.sh가 `--from`과 `--to`를 지원하므로 clone을 수정할 필요 없이 `--from=M --to=M`으로 Step M만 실행한다. golden base에 Step 1..M-1이 이미 커밋되어 있으므로 이전 Step은 skip된다.
 
-```bash
-echo "testbed/" >> ".plan/$PLAN_NAME/.gitignore"
-```
+### 1-2. 병렬 실행
 
-### 1-3. 병렬 실행
-
-각 clone에서 plan.sh를 실행한다. `--step=M`이 지정되면 해당 Step만 실행한다.
-
-Claude Code의 Agent 도구를 사용하여 각 run을 병렬로 실행한다:
+Claude Code의 Agent 도구로 각 run을 병렬 실행한다:
 
 ```
 각 run에 대해 Agent를 spawn:
-  - clone 디렉토리($TESTBED_DIR/run-$i)로 이동
-  - bash plan.sh (또는 bash plan.sh --from=M 으로 특정 Step만)
-  - 실행 결과를 run-N.log에 기록
+  - $TESTBED_DIR/run-$i 디렉토리에서
+  - bash plan.sh --from=M --to=M 실행
+  - 실행 결과를 기록
 ```
 
-실패한 run이 있으면 해당 run을 제외하고 나머지로 분석을 진행한다.
-모든 run이 실패하면 에러를 보고하고 중단한다.
+실패한 run은 제외하고 나머지로 분석 진행. 모든 run 실패 시 에러 보고 후 중단.
 
-### 1-4. 결과 수집
+### 1-3. 결과 수집
 
-각 clone에서 실행 후 변경된 파일 목록과 내용을 수집한다.
+각 clone에서 Step M의 변경분을 수집한다.
 
 ```bash
 for i in $(seq 1 $RUNS); do
   RUN_DIR="$TESTBED_DIR/run-$i"
-  # 변경된 파일 목록
-  git -C "$RUN_DIR" diff --name-only HEAD > "$TESTBED_DIR/run-$i-files.txt"
-  # 각 파일의 내용
-  git -C "$RUN_DIR" diff HEAD > "$TESTBED_DIR/run-$i-diff.patch"
+  git -C "$RUN_DIR" diff --name-only HEAD > "$TESTBED_DIR/step-$M-run-$i-files.txt"
+  git -C "$RUN_DIR" diff HEAD > "$TESTBED_DIR/step-$M-run-$i-diff.patch"
 done
 ```
 
-## Phase 2: 발산 분석
+### 1-4. 발산 분석
 
-### 2-1. 구조 발산 (자동 탐지)
+#### 구조 발산 (자동 탐지)
 
 각 run의 파일 목록을 비교한다. 모든 run에 존재하는 파일과, 일부 run에만 존재하는 파일을 분류한다.
 
 ```
-파일 존재 매트릭스:
+Step M 파일 존재 매트릭스:
 | 파일 경로            | run-1 | run-2 | run-3 |
 | -------------------- | ----- | ----- | ----- |
 | src/lib/auth.ts      | ✅    | ✅    | ✅    |  ← 수렴
 | src/lib/auth-opts.ts | ❌    | ❌    | ✅    |  ← 발산
 ```
 
-모든 run에 동일하게 존재하는 파일은 수렴, 그렇지 않은 파일은 구조 발산으로 분류한다.
+#### 내용 발산 (AI 분류)
 
-### 2-2. 내용 발산 (AI 분류)
+모든 run에 존재하는 파일에 대해, run 간 diff를 비교하고 발산 유형을 분류한다:
 
-모든 run에 존재하는 파일에 대해, run 간 diff를 Claude에게 보여주고 발산 유형을 분류하게 한다.
-
-분류할 발산 유형:
-
-- **패턴 발산**: 같은 기능인데 다른 구현 패턴 (예: JWT vs database 세션)
+- **패턴 발산**: 같은 기능인데 다른 구현 (예: JWT vs database 세션)
 - **네이밍 발산**: 같은 개념인데 다른 이름 (예: authOptions vs authConfig)
-- **범위 발산**: 요청하지 않은 기능이 추가됨 (예: 커스텀 에러 페이지)
-
-각 발산에 대해:
-- 어떤 run들이 어떤 선택을 했는지 표로 정리
-- 다수결이 있으면 기본 추천으로 제시
+- **범위 발산**: 요청하지 않은 기능 추가
 
 **사용자에게 AI 분류 결과를 확인받는다.** 분류가 틀렸으면 사용자가 수정한다.
 
-## Phase 3: 사용자 결정 요청
+### 1-5. 수렴 판정
 
-각 발산 지점을 사용자에게 하나씩 제시하고 결정을 받는다.
-
-발산 제시 형식:
+**수렴**: 구조 발산 0건, 내용 발산 0건.
 
 ```
-발산 #1: 세션 전략
+✅ Step M: {이름} — 수렴 ({RUNS}회 실행 모두 동일)
+```
+
+→ Phase 2로 이동.
+
+**발산**: 1건 이상.
+
+```
+Step M: {이름} — {N}건 발산
+하나씩 결정합니다.
+```
+
+→ 1-6으로 이동.
+
+### 1-6. 사용자 결정 요청
+
+각 발산을 사용자에게 제시하고 결정을 받는다.
+
+```
+[Step M] 발산 #1: 세션 전략
   run-1: JWT
   run-2: JWT
   run-3: database
@@ -148,92 +195,119 @@ done
 범위 발산의 경우:
 
 ```
-발산 #2: 커스텀 에러 페이지
+[Step M] 발산 #2: 커스텀 에러 페이지
   run-1: 없음
   run-2: 생성됨
   run-3: 없음
   
   이 기능은 요청하지 않았습니다.
   A) 금지 (harness에 "절대 금지" 추가)
-  B) 허용 (이 기능을 포함하기로 결정)
+  B) 허용
 ```
 
-## Phase 4: 하네스 업데이트
+### 1-7. 하네스 업데이트
 
-사용자 결정을 하네스 규칙으로 변환하여 추가한다.
-
-### 결정 → 규칙 매핑
+사용자 결정을 하네스 규칙으로 변환한다.
 
 | 발산 유형 | 하네스 위치 | 규칙 형태 |
 |----------|-----------|----------|
-| 구조 발산 | harness-step-M.md | "생성할 파일 목록"에 파일 추가/제거 |
-| 패턴 발산 | harness-step-M.md | "이 Step의 아키텍처 제약"에 규칙 추가 |
-| 네이밍 발산 | harness-global.md | "코딩 규칙"에 네이밍 컨벤션 추가 |
+| 구조 발산 | harness-step-M.md | "생성할 파일 목록"에 추가/제거 |
+| 패턴 발산 | harness-step-M.md | "아키텍처 제약"에 규칙 추가 |
+| 네이밍 발산 | harness-global.md | "코딩 규칙"에 컨벤션 추가 |
 | 범위 발산 | harness-step-M.md 또는 harness-global.md | "절대 금지"에 항목 추가 |
 
-네이밍 발산은 프로젝트 전체에 영향을 미치므로 글로벌 하네스에 추가한다.
-나머지는 해당 Step의 하네스에 추가한다.
-
-### 하네스 수정 시 주의
-
+주의:
 - 기존 규칙을 삭제하지 않는다. 추가만 한다.
-- 추가하는 규칙이 기존 규칙과 모순되면 사용자에게 알리고 어느 쪽을 유지할지 결정받는다.
-- 규칙 추가 후 기존에 수렴했던 항목이 새로 발산할 수 있다 (프롬프트 맥락 변경). 이 리스크를 사용자에게 안내한다.
+- 기존 규칙과 모순되면 사용자에게 알리고 결정받는다.
 
-## Phase 5: 발산 리포트 생성
+### 1-8. 재검증
 
-`.plan/$PLAN_NAME/divergence-report.md`에 교정 결과를 기록한다.
+하네스 업데이트 후 사용자에게 확인:
+
+```
+Step M 하네스를 업데이트했습니다. ({N}건 규칙 추가)
+재실행하여 수렴을 확인할까요? (Y/건너뛰기)
+```
+
+- **Y**: run-* 디렉토리 정리 후 1-1로 돌아가 재실행
+- **건너뛰기**: Phase 2로 이동 (수렴 미확인 상태로 다음 Step 진행)
+
+## Phase 2: 골든 베이스 업데이트
+
+Step M이 수렴(또는 하네스 업데이트 완료)하면, 수렴된 결과를 golden base에 반영한다.
+
+```bash
+# run-1의 Step M 변경분을 golden base에 적용
+cd "$TESTBED_DIR/run-1"
+git diff HEAD > /tmp/step-$M.patch
+cd "$TESTBED_DIR/golden"
+git apply /tmp/step-$M.patch
+git add -A && git commit -m "calibrate: Step $M 수렴"
+```
+
+수렴 시 모든 run이 동일하므로 run-1을 대표로 사용한다.
+발산 후 건너뛰기한 경우, 사용자 결정에 가장 부합하는 run을 선택한다.
+
+run-* 디렉토리 정리:
+```bash
+for i in $(seq 1 $RUNS); do rm -rf "$TESTBED_DIR/run-$i"; done
+```
+
+이제 golden base에는 Step 1..M까지의 수렴 결과가 누적되어 있다.
+
+**다음 Step이 있으면**: Step M+1로 Phase 1을 반복.
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Step M 교정 완료. Step {M+1}: {이름} 으로 넘어갑니다.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**마지막 Step이면**: Phase 3으로.
+
+## Phase 3: 최종 리포트 + cleanup
+
+### 교정 리포트 생성
+
+`.plan/$PLAN_NAME/calibration-report.md`에 전체 교정 결과를 기록:
 
 ```markdown
-# 발산 리포트 — Step M: {Step 이름}
+# 교정 리포트 — {PLAN_NAME}
 
-실행 횟수: {N} | 날짜: {날짜}
+실행 횟수: {N}회/Step | 날짜: {날짜}
 
-## 수렴율: {X}% ({N}회 중 {Y}회 일치)
+## Step별 교정 결과
 
-## 구조 발산
+### Step 1: {이름}
+- 수렴: ✅ (첫 실행에서 수렴)
+- 발산: 0건
+- 하네스 변경: 없음
 
-{파일 존재 매트릭스}
+### Step 2: {이름}
+- 수렴: ✅ (재실행 1회 후 수렴)
+- 발산: 2건 (패턴 1, 네이밍 1)
+- 사용자 결정:
+  - 세션 전략 → JWT
+  - 설정 변수명 → authConfig
+- 하네스 변경:
+  - harness-step-2.md: 아키텍처 제약 1건 추가
+  - harness-global.md: 코딩 규칙 1건 추가
 
-## 패턴 발산
+### Step 3: {이름}
+...
 
-{패턴 비교 테이블}
+## 전체 요약
 
-## 네이밍 발산
+| Step | 초기 수렴 | 재실행 | 발산 | 결정 | 하네스 변경 |
+|------|----------|--------|------|------|-----------|
+| 1    | ✅       | 0      | 0    | 0    | 0         |
+| 2    | ❌       | 1      | 2    | 2    | 2         |
+| 3    | ✅       | 0      | 0    | 0    | 0         |
 
-{네이밍 비교 테이블}
-
-## 범위 발산
-
-{범위 초과 항목}
-
-## 발산 요약
-
-- 구조: {N}건
-- 패턴: {N}건
-- 네이밍: {N}건
-- 범위: {N}건
-
-## 사용자 결정 ({N}건)
-
-{각 결정 내용}
-
-## 하네스 변경 ({N}건)
-
-{추가된 규칙 목록}
+전체 하네스 변경: {N}건
 ```
 
-교정 이력은 `.plan/$PLAN_NAME/calibration-history/`에 누적한다:
-
-```
-.plan/{plan-name}/calibration-history/
-├── step-M-run-1.log
-├── step-M-run-2.log
-├── step-M-run-3.log
-└── step-M-convergence.md    ← 수렴 추이 (67% → 95% → ...)
-```
-
-## Phase 6: cleanup 및 안내
+교정 이력은 `.plan/$PLAN_NAME/calibration-history/`에 누적한다.
 
 ### testbed 정리
 
@@ -241,26 +315,24 @@ done
 rm -rf "$TESTBED_DIR"
 ```
 
-clone은 완전 독립이므로 단순 삭제로 정리 완료. 브랜치 관리 불필요.
-
 ### 결과 안내
 
 ```
 교정 완료:
-  발산: {N}건 발견, {M}건 해결
-  수렴율: {이전}% → {현재}% (예상)
+  교정 Step: {from}~{last} ({N}개 Step)
+  발산 총합: {N}건 발견, {M}건 해결
   하네스 변경: {파일 목록}
-  리포트: .plan/{plan-name}/divergence-report.md
+  리포트: .plan/{plan-name}/calibration-report.md
 
 다음 단계:
   1. 변경된 하네스를 확인하세요
-  2. /planosh-calibrate --step=M 으로 다시 교정하여 수렴을 확인하세요
-  3. 수렴율 100%에 가까워지면 교정을 종료하세요
+  2. bash plan.sh --dry 로 프롬프트를 확인하세요
+  3. bash plan.sh 로 실제 실행하세요
 ```
 
-수렴율이 이미 100%면:
+모든 Step이 첫 실행에서 수렴한 경우:
 
 ```
-수렴율 100%! Step M의 하네스가 충분히 결정적입니다.
+전 Step 수렴! 하네스가 충분히 결정적입니다.
 추가 교정이 필요하지 않습니다.
 ```
