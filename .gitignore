@@ -3,3 +3,7 @@
 
 # gstack local state
 .gstack/
+
+# local docs and todos
+docs/
+TODOS.md

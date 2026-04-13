@@ -17,7 +17,13 @@
 
 Markdown specs don't turn into code. They turn into *interpretations* of code, and every AI session produces a different one. Worse, **AI defaults to "build more" whenever it meets ambiguity**. Ask for a login and you get MFA, email verification, rate limiting, three abstract layers &mdash; none of which you asked for. **40 files changed, +4,567 -12,300. That's how the PR gets born.**
 
-SDD tools hide this gap behind a friendlier UI, and inside that UI, AI never stops over-implementing. Writing "don't build this" in the spec doesn't help &mdash; the spec is prose, and the underlying structure that maps identical input to divergent output is still there.
+SDD tools know this. They don't expose it. Over-implementation is the feature that makes vibe coding demos go viral &mdash; "look, it built the whole thing from one sentence." Showing that the output diverges every run, or that half the generated code was never asked for, would kill the magic. So the gap stays hidden behind a friendlier UI, the spec stays prose, and the structure that maps identical input to divergent output stays intact.
+
+If you've ever tried to bring one of these frameworks into a team that ships to production, you already know. The demo is impressive. Then you run it on real code, open the PR, and it hits you.
+
+The next wave says "harness." Rules files, system prompts, coding conventions &mdash; bolt a generic harness onto the agent and determinism follows. **It doesn't.** A harness constrains *style*: naming, folder layout, lint rules. It cannot constrain *decisions*: which files to create, which libraries to pick, how to decompose a feature into functions. Those decisions live at the plan level, and a generic harness has no opinion about them. Run the same prompt with the same harness twice &mdash; you'll get two structurally different codebases that both pass the style rules. **The harness is green. The output diverged.**
+
+Generic harnesses solve the wrong layer. Determinism doesn't come from constraining how code looks. It comes from constraining what gets built, in what order, with what boundaries. That's a plan, not a harness.
 
 ---
 
@@ -34,15 +40,16 @@ Determinism is measurable &mdash; run the same plan N times in parallel and diff
 
 ---
 
-**The evidence.** We ran one `plan.sh` for **16 hours unattended**, migrating a production app (1+ year in the wild) from Flutter to React Native. It finished on the first try. No one touched the keyboard.
+**The evidence.** We ran one `plan.sh` for **16 hours unattended**, migrating a production app (1+ year in the wild) from Flutter to React Native. No one touched the keyboard. The result wasn't production-ready &mdash; there were gaps. But compared to Claude Code's batch mode and Speckit-generated specs running the same migration, the completeness wasn't even in the same league. And this was **without calibration** &mdash; no parallel runs, no divergence detection, no harness tightening.
 
-Writing the plan took 2 days. **That ratio is the whole point.** Make the plan deterministic before you execute, and execution stops being a gamble.
+Writing the plan took 2 days. **That ratio is the whole point.** Invest in the plan, not in babysitting the execution. Calibration would have closed the remaining gaps before the run even started.
 
 ## Existing SDD tools vs. planosh
 
-| Existing SDD tools | planosh |
+| Existing approaches | planosh |
 |---|---|
 | AI over-implements while interpreting the spec | The plan is deterministic, so interpretation never happens |
+| Generic harness constrains style, not decisions | **Plan-specific harness constrains what gets built, in what order** |
 | Measures "did it work?" | **Measures "did it converge?"** (same plan &rarr; same code, N runs) |
 | You review 4,000 lines of PR | You review the plan. Skip the code. |
 | Unattended execution is a gamble | **Determinism makes 16-hour unattended runs real** |
@@ -122,6 +129,13 @@ bash plan.sh
 
 planosh is a proposal, not a finished framework. We're building patterns and best practices together. **You don't need to contribute code &mdash; share your plans.**
 
+That said, there's active development ahead on two fronts:
+
+- **plan.sh readability** &mdash; plan.sh is a shell script, and shell scripts get ugly fast. We're working on making plans easier to read and write without sacrificing determinism.
+- **`planosh run`** &mdash; a CLI that spins up N isolated testbeds with shim-git and runs `plan.sh` in parallel. This is the execution environment that makes calibration (`--mode calibrate`) and internal parallelism (`--mode split`) real. See [#1](https://github.com/ASDFGHoney/planosh/issues/1) and [#2](https://github.com/ASDFGHoney/planosh/issues/2).
+
+Both are open for contribution.
+
 ### Share your plan.sh
 
 The `.plan/` directory in this repo is the community's best practice collection. Contribute yours via PR:
@@ -176,17 +190,13 @@ Built something with planosh? [Open a PR](https://github.com/ASDFGHoney/planosh/
 
 The `best-practices/` directory collects planosh's **execution pattern best practices**. (Where `.plan/` is the community's **domain plan collection**, this is the meta layer — how to design and run plan.sh itself.)
 
-| Best practice | Description |
-|---|---|
-| [push-race](best-practices/push-race/plan-for-human.md) | Run the same plan in parallel across N isolated clones. `git push` atomicity (optimistic locking) decides a single winner. No orchestrator. |
-
-Each best practice ships in the same shape as a planosh output (`plan.sh` + `plan-for-human.md` + `harness-*.md`), so you can copy it into your project and adapt it directly.
+*No entries yet. Contribute yours via PR.*
 
 ## Further reading
 
 - [Design Document](docs/DESIGN.md) &mdash; Problem definition, 3-layer constraint model, calibration loops, full plan.sh example
 - [Example PRDs](docs/) &mdash; Retro webapp, C compiler, Markdown-to-slides
-- [Best Practices](best-practices/) &mdash; Reference implementations for execution patterns like push-race
+- [Best Practices](best-practices/) &mdash; Execution pattern reference implementations
 
 ## License
 
