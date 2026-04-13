@@ -135,8 +135,8 @@ planosh는 완성된 프레임워크가 아니라 제안이다. 패턴과 모범
 .plan/
   your-plan-name/
     plan.sh
-    harness-global.md
-    harness-step-N.md (선택)
+    harness-for-plan.md
+    harness-for-step-N.md (선택)
     README.md
 ```
 

@@ -31,3 +31,17 @@
   - `/planosh` Phase 2에서 선택적으로 패턴 검색을 제안하는 연동
   - 추천 라벨 체계: `divergence:naming`, `stack:nextjs`, `convergence:100` 등
 - **Depends on:** .plan/ 커뮤니티 기여가 일정 수준 이상 쌓인 후
+
+## TODO-004: `planosh` CLI — 플랫폼별 스킬 설치 + 프로젝트별 커스텀 + 선택적 업데이트
+
+- **What:** CLI 도구(`planosh`)를 만들어서 (1) 원하는 플랫폼(Claude Code, Cursor, Windsurf 등)의 스킬 형태로 설치, (2) 프로젝트별로 스킬을 커스텀, (3) 오픈소스 업스트림 변경사항을 plan.sh 방식으로 선택적 적용
+- **Why:** 현재 planosh는 Claude Code 플러그인으로만 배포된다. 플랫폼마다 스킬/룰 포맷이 다르고(SKILL.md, .cursorrules, .windsurfrules 등), 프로젝트마다 하네스 전략이 다르다. 설치 후 커스텀한 스킬에 업스트림 변경이 오면 전부 덮어쓸 수도 없고 무시할 수도 없다 — 선택적 머지가 필요하다.
+- **Scope:**
+  - **설치:** `planosh install --platform=claude-code` → 해당 플랫폼 포맷으로 스킬 파일 생성. 플랫폼 어댑터 패턴.
+  - **커스텀:** 설치된 스킬은 프로젝트 로컬에 복사되어 자유롭게 수정 가능. 원본 버전을 `.planosh/upstream/`에 보존하여 diff 기준점 유지.
+  - **업데이트:** `planosh update` → 업스트림 변경사항을 3-way diff로 보여주고, 변경 단위(섹션/Phase/규칙)별로 적용 여부를 사용자가 결정. plan.sh의 "결정성" 원칙 그대로 — AI가 머지하지 않고, 사용자가 각 변경의 적용 여부를 결정한다.
+  - **지원 플랫폼 (초기):** Claude Code (SKILL.md), Cursor (.cursorrules), Windsurf (.windsurfrules)
+  - **버전 추적:** `.planosh/manifest.json`에 설치된 스킬별 업스트림 버전 + 커스텀 여부 기록
+- **Pros:** 플랫폼 종속 탈피. 프로젝트별 커스텀이 업데이트에 안전. planosh 철학(결정성, 사용자 결정)이 배포/업데이트에도 일관되게 적용.
+- **Cons:** 플랫폼 어댑터 유지보수 부담. 3-way diff 구현 복잡도. 플랫폼별 스킬 포맷이 바뀌면 어댑터도 갱신 필요.
+- **Depends on:** 스킬이 안정화된 후 (v0.3.0+). 플랫폼별 스킬 포맷 리서치 선행.

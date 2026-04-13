@@ -19,7 +19,7 @@ plan.sh의 각 Step을 순서대로 N번 병렬 실행하여, 해당 Step이 수
 
 ## 전제 조건
 
-- `plan.sh`가 현재 프로젝트에 존재해야 한다
+- `.plan/{plan-name}/plan.sh`가 존재해야 한다 (plan-name은 사용자가 지정하거나, `.plan/` 안에 하나만 있으면 자동 감지)
 - plan.sh 내부의 `PLAN_NAME` 변수를 읽어 `.plan/{plan-name}/` 디렉토리를 특정한다
 - `--from=M`(M≥2)을 사용할 경우, Step M-1까지 완료된 커밋이 현재 브랜치에 있어야 한다
 - v0 제약: 포트나 DB를 사용하는 verify가 있으면 병렬 실행 시 충돌할 수 있다. 빌드/파일 검증만 있는 plan.sh에서 가장 안전하다.
@@ -28,21 +28,28 @@ plan.sh의 각 Step을 순서대로 N번 병렬 실행하여, 해당 Step이 수
 
 ### 0-1. plan.sh 검증
 
+사용자가 plan-name을 지정하지 않으면 `.plan/` 안에 디렉토리가 하나뿐일 때 자동 감지한다.
+
 ```bash
-[ -f plan.sh ] || { echo "plan.sh를 찾을 수 없습니다."; exit 1; }
-PLAN_NAME=$(grep '^PLAN_NAME=' plan.sh | head -1 | cut -d'"' -f2)
-[ -z "$PLAN_NAME" ] && { echo "plan.sh에 PLAN_NAME이 정의되지 않았습니다."; exit 1; }
+# plan-name 결정: 사용자 지정 or 자동 감지
+if [ -z "$PLAN_NAME" ]; then
+  PLAN_DIRS=($(ls -d .plan/*/  2>/dev/null))
+  [ ${#PLAN_DIRS[@]} -eq 1 ] && PLAN_NAME=$(basename "${PLAN_DIRS[0]}")
+  [ -z "$PLAN_NAME" ] && { echo ".plan/ 안에 plan이 여러 개입니다. --plan=이름을 지정하세요."; exit 1; }
+fi
+PLAN_SH=".plan/$PLAN_NAME/plan.sh"
+[ -f "$PLAN_SH" ] || { echo "$PLAN_SH를 찾을 수 없습니다."; exit 1; }
 [ -d ".plan/$PLAN_NAME" ] || { echo ".plan/$PLAN_NAME/ 디렉토리를 찾을 수 없습니다."; exit 1; }
 ```
 
 ### 0-2. Step 목록 추출
 
-plan.sh에서 `CURRENT_STEP=N; step N "이름"` 패턴을 파싱하여 전체 Step 목록을 추출한다.
+`$PLAN_SH`에서 `CURRENT_STEP=N; step N "이름"` 패턴을 파싱하여 전체 Step 목록을 추출한다.
 
 파싱 결과를 사용자에게 보여준다:
 
 ```
-plan.sh에서 N개 Step을 감지했습니다:
+.plan/{plan-name}/plan.sh에서 N개 Step을 감지했습니다:
   Step 1: 프로젝트 스캐폴딩
   Step 2: DB 스키마 + API
   Step 3: 인증
@@ -106,7 +113,7 @@ done
 
 `cp -r` 사용: golden base는 이미 로컬 clone이므로, 다시 git clone보다 빠르다.
 
-plan.sh가 `--from`과 `--to`를 지원하므로 clone을 수정할 필요 없이 `--from=M --to=M`으로 Step M만 실행한다. golden base에 Step 1..M-1이 이미 커밋되어 있으므로 이전 Step은 skip된다.
+`$PLAN_SH`가 `--from`과 `--to`를 지원하므로 clone을 수정할 필요 없이 `--from=M --to=M`으로 Step M만 실행한다. golden base에 Step 1..M-1이 이미 커밋되어 있으므로 이전 Step은 skip된다.
 
 ### 1-2. 병렬 실행
 
@@ -115,7 +122,7 @@ Claude Code의 Agent 도구로 각 run을 병렬 실행한다:
 ```
 각 run에 대해 Agent를 spawn:
   - $TESTBED_DIR/run-$i 디렉토리에서
-  - bash plan.sh --from=M --to=M 실행
+  - bash $PLAN_SH --from=M --to=M 실행
   - 실행 결과를 기록
 ```
 
@@ -211,10 +218,10 @@ Step M: {이름} — {N}건 발산
 
 | 발산 유형 | 하네스 위치 | 규칙 형태 |
 |----------|-----------|----------|
-| 구조 발산 | harness-step-M.md | "생성할 파일 목록"에 추가/제거 |
-| 패턴 발산 | harness-step-M.md | "아키텍처 제약"에 규칙 추가 |
-| 네이밍 발산 | harness-global.md | "코딩 규칙"에 컨벤션 추가 |
-| 범위 발산 | harness-step-M.md 또는 harness-global.md | "절대 금지"에 항목 추가 |
+| 구조 발산 | harness-for-step-M.md | "생성할 파일 목록"에 추가/제거 |
+| 패턴 발산 | harness-for-step-M.md | "아키텍처 제약"에 규칙 추가 |
+| 네이밍 발산 | harness-for-plan.md | "코딩 규칙"에 컨벤션 추가 |
+| 범위 발산 | harness-for-step-M.md 또는 harness-for-plan.md | "절대 금지"에 항목 추가 |
 
 주의:
 - 기존 규칙을 삭제하지 않는다. 추가만 한다.
@@ -288,8 +295,8 @@ for i in $(seq 1 $RUNS); do rm -rf "$TESTBED_DIR/run-$i"; done
   - 세션 전략 → JWT
   - 설정 변수명 → authConfig
 - 하네스 변경:
-  - harness-step-2.md: 아키텍처 제약 1건 추가
-  - harness-global.md: 코딩 규칙 1건 추가
+  - harness-for-step-2.md: 아키텍처 제약 1건 추가
+  - harness-for-plan.md: 코딩 규칙 1건 추가
 
 ### Step 3: {이름}
 ...
@@ -324,8 +331,8 @@ rm -rf "$TESTBED_DIR"
 
 다음 단계:
   1. 변경된 하네스를 확인하세요
-  2. bash plan.sh --dry 로 프롬프트를 확인하세요
-  3. bash plan.sh 로 실제 실행하세요
+  2. bash .plan/{plan-name}/plan.sh --dry 로 프롬프트를 확인하세요
+  3. bash .plan/{plan-name}/plan.sh 로 실제 실행하세요
 ```
 
 모든 Step이 첫 실행에서 수렴한 경우:

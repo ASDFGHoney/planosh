@@ -144,8 +144,8 @@ The `.plan/` directory in this repo is the community's best practice collection.
 .plan/
 +-- your-plan-name/
     +-- plan.sh
-    +-- harness-global.md
-    +-- harness-step-N.md (optional)
+    +-- harness-for-plan.md
+    +-- harness-for-step-N.md (optional)
     +-- README.md
 ```
 
