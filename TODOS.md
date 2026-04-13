@@ -140,3 +140,56 @@
 - **Pros:** 사용자 신뢰도 증가. 문제 발생 시 어디서 멈췄는지 즉시 파악 가능. calibrate 도중 방향 수정 가능.
 - **Cons:** 에이전트 스킬 방식은 SendMessage 오버헤드. CLI TUI는 구현 복잡도.
 - **Depends on:** TODO-004 (CLI)와 병렬 진행 가능. Phase 1은 지금 바로 시작 가능.
+
+## TODO-006: `planosh run` — 세션 내 N-plan.sh 병렬 실행과 shim-git testbed
+
+> GitHub Issue #1에서 이관 (2026-04-13)
+
+- **What:** Claude 세션 안에서 N개 plan.sh를 결정적으로 병렬 실행할 수 있는 CLI 환경(`planosh run`) + 각 testbed에서 진짜 git 대신 shim-git으로 격리하는 구조.
+- **Why:** Claude의 bash tool call은 stateless라 CWD 미보존·타임아웃·병렬 상태 공유 불가. 드라이버 역할을 Claude가 아닌 CLI가 해야 한다. 또한 병렬 worker가 같은 repo에서 git을 쓰면 index lock·ref 경합·원격 오염이 발생. calibrate에 진짜 git은 필요 없고 파일트리 diff면 충분 — shim-git이 이 깨달음의 구현체.
+- **구조:**
+  - **계층 1 — `planosh run` CLI:** 단일 명령으로 N-병렬 plan.sh 실행. testbed 디렉토리 생성, shim PATH 주입, bash spawn, 로그 수집, 결과 집계. 출력은 구조화된 JSON 요약.
+  - **계층 2 — shim-git:** 각 testbed의 PATH 앞에 git shim 삽입. `git add/commit` → hardlink 스냅샷, `git reset --hard` → 스냅샷 rsync, `git push/fetch` → no-op (원격 오염 차단), 미지원 옵션 → 조기 실패.
+- **모드 분리:**
+  - `--mode calibrate`: shim-git 기반 발산 측정 (비교 목적)
+  - `--mode race`: real git + real remote 경쟁 착륙 (push 목적)
+  - `--mode split` (향후): shim-git + POSIX claim 협력 분할 실행
+- **열린 질문:** shim-git API 경계(최소 호환 범위), CLI 구현 언어(bash vs Rust/Go), 스냅샷 COW 안전성(hardlink vs reflink vs cp -a), 장시간 실행 시 상태 폴링 패턴, 결정성 자체 검증(shim self-calibration)
+- **산출물:**
+  - [ ] `planosh run` CLI 스펙 초안
+  - [ ] shim-git 최소 API 정의 (지원 / no-op / 조기실패 3분류)
+  - [ ] shim-git self-calibration 테스트
+  - [ ] 프로토타입: 2-워커 calibrate, 단일 호스트
+  - [ ] 하네스 문서에 "shim-safe git subset" 섹션 추가
+- **Depends on:** DESIGN.md 원칙 1(가독성) + 원칙 3(결정성). TODO-004(CLI)와 연관.
+
+## TODO-007: plan.sh 내부 병렬 실행 — 낙관적 실행 + 수렴 재시도
+
+> GitHub Issue #2에서 이관 (2026-04-13)
+
+- **What:** 단일 plan.sh 안의 독립적인 Step들을 병렬로 실행하여 총 실행 시간을 줄이되, 결정성을 깨지 않는 메커니즘.
+- **Why:** 실전 dogfooding에서 16시간(Flutter→RN 마이그레이션) 사례 발생. 많은 Step이 실제로 독립적(DAG)인데 순차 실행이 강제됨. 피드백 루프 속도를 올려야 calibration 사이클이 빨라진다.
+- **방향 — 낙관적 실행 + 수렴 재시도:**
+  1. **격리 스냅샷 실행** — 병렬 Step을 각각 격리된 환경에서 실행
+  2. **낙관적 병합** — 완료 후 순서대로 본 트리에 합침
+  3. **충돌 시 재실행** — 지는 Step을 이긴 Step 결과 위에서 재실행 (컨텍스트 주입)
+  4. **stuck 감지** — 같은 Step이 N회 연속 재시도 실패 시 순차로 강등 + 리포트
+- **plan.sh에서의 표현:**
+  ```bash
+  planosh parallel --name "auth" \
+    --step "Step 2: auth 백엔드" \
+    --step "Step 3: 설정 페이지 UI" \
+    --max-retries 3 \
+    --on-stuck "serial"
+  ```
+- **중첩 병렬 문제 (calibrate × split):** calibrate N=3, split M=4이면 동시 12개 AI 세션 + 재시도. 자원 폭발, 격리 레이어 합성, 수렴 재시도가 calibrate 발산 시그널을 오염시키는 문제가 핵심. 재시도 경로의 결정성 보장과 calibrate의 발산 분류("경로 의존 발산" vs "plan 발산" 분리)가 필요.
+- **열린 질문:** 격리 메커니즘(shim-git 재사용 vs worktree), 재실행 결정성, verify 경계(개별 vs 그룹), checkpoint 단위, stuck 파라미터, DRY 모드 시각화, 중첩 병렬 결정성 보장
+- **산출물:**
+  - [ ] `planosh parallel` CLI 스펙 초안
+  - [ ] 격리 메커니즘 결정 — TODO-006과 합의
+  - [ ] 수렴 재시도 루프 + stuck 감지 구현
+  - [ ] 병렬 그룹 포함 plan.sh 예제 1개 (16시간 → 단축 측정)
+  - [ ] calibrate 모드에서 병렬 그룹 결정성 수렴 검증
+  - [ ] 중첩 병렬 시나리오 동작 검증
+  - [ ] 재시도 경로가 calibrate 발산 시그널에 미치는 영향 측정
+- **Depends on:** TODO-006 (`planosh run` + shim-git). DESIGN.md 규칙 2(수렴 루프).

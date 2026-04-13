@@ -441,6 +441,38 @@ plan-for-human.md (사후 작업):
 사용자가 수정을 요청하면 반영한 후 다시 승인을 받는다.
 승인 없이 파일을 생성하지 않는다.
 
+### 실행 옵션
+
+Step 구조가 승인되면, plan.sh의 기본 실행 옵션을 설정한다.
+
+```
+실행 옵션을 설정합니다.
+
+모델: plan.sh 실행 시 사용할 Claude 모델
+  A. opus   — 최고 품질, 느림
+  B. sonnet — 균형 (기본값)
+  C. haiku  — 빠름, 저렴
+
+선택하세요 (A/B/C) [기본: B]:
+```
+
+사용자 선택 후 effort를 묻는다:
+
+```
+추론 노력 수준:
+  1. low    — 최소 추론, 단순 작업용
+  2. medium — 적절한 균형
+  3. high   — 깊은 추론 (기본값)
+  4. max    — 최대 추론, 복잡한 작업용
+  5. auto   — 모델이 자동 판단
+
+선택하세요 (1-5) [기본: 3]:
+```
+
+선택 결과를 plan.sh의 `DEFAULT_MODEL`과 `DEFAULT_EFFORT` 변수에 반영한다.
+
+이 옵션은 plan.sh의 기본값일 뿐이다. 실행 시 `--model=X`, `--effort=X` 플래그로 오버라이드할 수 있다.
+
 ---
 
 ## Phase 4: 파일 생성
@@ -595,7 +627,9 @@ plan.sh는 **범용 러너**다. step-specific 코드를 포함하지 않는다.
 #   bash .plan/{plan-name}/plan.sh --from=N         Step N부터 재개
 #   bash .plan/{plan-name}/plan.sh --to=M           Step M까지만 실행
 #   bash .plan/{plan-name}/plan.sh --from=N --to=M  Step N~M만 실행
-#   bash .plan/{plan-name}/plan.sh --testbed          calibrate용 경량 모드 (Haiku)
+#   bash .plan/{plan-name}/plan.sh --model=opus    모델 오버라이드
+#   bash .plan/{plan-name}/plan.sh --effort=max    effort 오버라이드
+#   bash .plan/{plan-name}/plan.sh --testbed       calibrate용 경량 모드 (Haiku, low)
 #
 # 주의: --dangerously-skip-permissions를 사용합니다.
 # 반드시 steps.json + steps/*.md를 리뷰한 후 실행하세요.
@@ -606,15 +640,20 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT"
 
 DRY_RUN=false; START_FROM=1; STOP_AFTER=999; TESTBED=false
+DEFAULT_MODEL="{chosen-model}"; DEFAULT_EFFORT="{chosen-effort}"
+MODEL="$DEFAULT_MODEL"; EFFORT="$DEFAULT_EFFORT"
 [ -f "$SCRIPT_DIR/.plan-state" ] && START_FROM=$(cat "$SCRIPT_DIR/.plan-state")
 for arg in "$@"; do
   case $arg in
     --dry) DRY_RUN=true ;;
     --from=*) START_FROM="${arg#*=}" ;;
     --to=*) STOP_AFTER="${arg#*=}" ;;
+    --model=*) MODEL="${arg#*=}" ;;
+    --effort=*) EFFORT="${arg#*=}" ;;
     --testbed) TESTBED=true ;;
   esac
 done
+$TESTBED && MODEL="haiku" && EFFORT="low"
 
 PLAN_HARNESS="$SCRIPT_DIR/harness-for-plan.md"
 STEPS_FILE="$SCRIPT_DIR/steps.json"
@@ -651,15 +690,16 @@ run_claude() {
   if $DRY_RUN; then
     echo "[DRY] prompt ($1):"; echo "$prompt"; echo ""
     [ -n "$harness" ] && echo "[DRY] harness: $PLAN_HARNESS"
-    $TESTBED && echo "[DRY] model: haiku (testbed mode)"
+    echo "[DRY] model: $MODEL, effort: $EFFORT"
     return 0
   fi
 
-  local model_flag=""
-  $TESTBED && model_flag="--model haiku"
+  local effort_flag=""
+  [ "$EFFORT" != "auto" ] && effort_flag="--effort $EFFORT"
 
   claude -p "$prompt" \
-    $model_flag \
+    --model "$MODEL" \
+    $effort_flag \
     --append-system-prompt "$harness" \
     --dangerously-skip-permissions
 }
