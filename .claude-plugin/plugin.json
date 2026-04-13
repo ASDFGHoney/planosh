@@ -1,7 +1,7 @@
 {
   "name": "planosh",
-  "version": "0.1.0",
-  "description": "PRD를 결정적인 plan.sh + 하네스로 변환하는 AI 실행 계획 생성기",
+  "version": "0.2.0",
+  "description": "플랜-코드 갭을 결정성으로 좁힌다. PRD → plan.sh + 하네스 + calibration.",
   "author": {
     "name": "graphicchiheon"
   },
@@ -12,8 +12,8 @@
     "plan",
     "deterministic",
     "harness",
-    "prd",
-    "shell-script",
+    "calibration",
+    "plan-code-gap",
     "ai-coding"
   ]
 }
