@@ -34,6 +34,7 @@
 
 ## TODO-004: `planosh` CLI — 플랫폼별 스킬 설치 + 프로젝트별 커스텀 + 선택적 업데이트
 
+- **Status:** 🚧 진행 중 — 요구사항 정리 완료 (`docs/CLI-REQUIREMENTS.md`), TODO-006/008/009와 통합 설계
 - **What:** CLI 도구(`planosh`)를 만들어서 (1) 원하는 플랫폼(Claude Code, Cursor, Windsurf 등)의 스킬 형태로 설치, (2) 프로젝트별로 스킬을 커스텀, (3) 오픈소스 업스트림 변경사항을 plan.sh 방식으로 선택적 적용
 - **Why:** 현재 planosh는 Claude Code 플러그인으로만 배포된다. 플랫폼마다 스킬/룰 포맷이 다르고(SKILL.md, .cursorrules, .windsurfrules 등), 프로젝트마다 하네스 전략이 다르다. 설치 후 커스텀한 스킬에 업스트림 변경이 오면 전부 덮어쓸 수도 없고 무시할 수도 없다 — 선택적 머지가 필요하다.
 - **Scope:**
@@ -145,6 +146,7 @@
 
 > GitHub Issue #1에서 이관 (2026-04-13)
 
+- **Status:** 🚧 진행 중 — TODO-004 CLI에 통합. testbed 위치 `~/.planosh/testbed/`로 확정 (`docs/CLI-REQUIREMENTS.md`)
 - **What:** Claude 세션 안에서 N개 plan.sh를 결정적으로 병렬 실행할 수 있는 CLI 환경(`planosh run`) + 각 testbed에서 진짜 git 대신 shim-git으로 격리하는 구조.
 - **Why:** Claude의 bash tool call은 stateless라 CWD 미보존·타임아웃·병렬 상태 공유 불가. 드라이버 역할을 Claude가 아닌 CLI가 해야 한다. 또한 병렬 worker가 같은 repo에서 git을 쓰면 index lock·ref 경합·원격 오염이 발생. calibrate에 진짜 git은 필요 없고 파일트리 diff면 충분 — shim-git이 이 깨달음의 구현체.
 - **구조:**
@@ -196,6 +198,7 @@
 
 ## TODO-008: CLI 구조-중립 설계 — 프로젝트 레이아웃에 의존하지 않는 `.plan/` 발견 규칙
 
+- **Status:** 🚧 진행 중 — TODO-004 CLI의 기반 모듈로 통합 (`docs/CLI-REQUIREMENTS.md`)
 - **What:** CLI가 single repo, monorepo, submodule, codespace 등 어떤 코드 관리 방식에서도 동일하게 작동하도록 `.plan/` 위치 발견 규칙과 PROJECT_ROOT 계산 방식을 확정.
 - **Why:** 팀마다 코드 관리 방식이 전부 다르다. monorepo에서 `apps/web/.plan/`에 plan을 두는 팀, submodule 안에 `.plan/`을 넣는 팀, codespace에서 clone 후 harness로 감싸는 팀 등. CLI가 특정 구조를 가정하면 그 순간 범용성이 깨진다.
 - **현재 문제:**
@@ -244,6 +247,7 @@
 
 ## TODO-009: testbed 자기참조 문제 — testbed 경로를 plan 디렉토리 밖으로 분리
 
+- **Status:** 🚧 진행 중 — `~/.planosh/testbed/`로 확정. TODO-004 CLI에서 해결 (`docs/CLI-REQUIREMENTS.md`)
 - **What:** calibrate의 testbed 디렉토리가 `$PLAN_DIR/testbed` (= `.plan/<name>/testbed/`)에 생성되는데, plan 파일을 golden에 `cp -r`로 복사할 때 testbed 자체가 재귀적으로 포함되는 자기참조 문제.
 - **Why:** `.plan/<name>/` 안에 testbed가 있으면 plan 파일을 golden에 복사할 때 `cp -r`이 testbed까지 딸려 보낸다. `.gitignore`에 testbed를 추가해도 `cp -r`은 gitignore를 무시하므로 해결 안 됨. 현재 calibrate SKILL.md에 `echo "testbed/" >> "$PLAN_DIR/.gitignore"` 코드가 있지만 git clone 단계에만 효과가 있고, 이후 cp -r 단계에서는 무력.
 - **현상:** golden clone 내부의 `.plan/<name>/`에 `testbed/` 디렉토리가 잔류. 재귀 복사 중 깊은 경로에서 에러 발생.

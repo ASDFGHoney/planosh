@@ -1,0 +1,93 @@
+{
+  "plan_name": "calibrate-mvp",
+  "prd": "~/.gstack/projects/ASDFGHoney-planosh/graphicchiheon-main-design-20260413-185454.md",
+  "created": "2026-04-13",
+  "steps": [
+    {
+      "id": 1,
+      "name": "프로젝트 스캐폴딩",
+      "prompt": "step-1.md",
+      "verify": [
+        { "name": "Go 빌드", "run": "go build ./cmd/planosh/" }
+      ],
+      "commit": "feat: Go 프로젝트 초기화 — Cobra CLI 스캐폴딩"
+    },
+    {
+      "id": 2,
+      "name": ".plan/ 발견 + step 파서",
+      "prompt": "step-2.md",
+      "verify": [
+        { "name": "discover 테스트", "run": "go test ./internal/discover/" },
+        { "name": "step 테스트", "run": "go test ./internal/step/" }
+      ],
+      "commit": "feat: .plan/ 발견 규칙 + steps.json 파서"
+    },
+    {
+      "id": 3,
+      "name": "testbed 내부 모듈",
+      "prompt": "step-3.md",
+      "verify": [
+        { "name": "rsync 존재 확인", "run": "which rsync" },
+        { "name": "testbed 테스트", "run": "go test ./internal/testbed/" }
+      ],
+      "commit": "feat: testbed 모듈 — clone, rsync copy, cleanup, lockfile"
+    },
+    {
+      "id": 4,
+      "name": "diff 엔진",
+      "prompt": "step-4.md",
+      "verify": [
+        { "name": "diff 테스트", "run": "go test ./internal/diff/" }
+      ],
+      "commit": "feat: diff 엔진 — 2단계 비교 + 발산 분류"
+    },
+    {
+      "id": 5,
+      "name": "병렬 실행 엔진",
+      "prompt": "step-5.md",
+      "verify": [
+        { "name": "runner 테스트", "run": "go test ./internal/runner/" }
+      ],
+      "commit": "feat: 병렬 실행 엔진 — semaphore 기반 plan.sh 호출"
+    },
+    {
+      "id": 6,
+      "name": "자동 패치",
+      "prompt": "step-6.md",
+      "verify": [
+        { "name": "patch 테스트", "run": "go test ./internal/patch/" }
+      ],
+      "commit": "feat: 자동 패치 — claude -p 호출 + step 프롬프트 패치"
+    },
+    {
+      "id": 7,
+      "name": "calibrate 통합 + 리포트",
+      "prompt": "step-7.md",
+      "verify": [
+        { "name": "Go 빌드", "run": "go build ./cmd/planosh/" },
+        { "name": "전체 테스트", "run": "go test ./..." }
+      ],
+      "commit": "feat: calibrate 커맨드 통합 + calibration-report 생성"
+    },
+    {
+      "id": 8,
+      "name": "E2E 테스트",
+      "prompt": "step-8.md",
+      "verify": [
+        { "name": "E2E 테스트", "run": "go test -run TestE2E ./..." }
+      ],
+      "commit": "test: E2E 테스트 — mock claude -p calibrate 전체 흐름"
+    },
+    {
+      "id": 9,
+      "name": "배포 + 정리",
+      "prompt": "step-9.md",
+      "verify": [
+        { "name": "Go 빌드", "run": "go build ./cmd/planosh/" },
+        { "name": "Go vet", "run": "go vet ./..." },
+        { "name": "CLI-REQUIREMENTS.md 삭제 확인", "run": "test ! -f docs/CLI-REQUIREMENTS.md" }
+      ],
+      "commit": "chore: goreleaser + install.sh + GitHub Actions 배포 설정"
+    }
+  ]
+}
