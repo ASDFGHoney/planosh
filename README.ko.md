@@ -97,12 +97,11 @@ planosh는 설치하는 패키지가 아니라 개념이다. 시작하려면:
 
 **1. plan.sh를 직접 작성** &mdash; `claude -p` 호출이 있는 셸 스크립트면 된다.
 
-**2. 또는 레퍼런스 스킬 사용** (Claude Code):
+**2. 또는 레퍼런스 스킬 사용** (Claude Code 플러그인):
 
 ```bash
-# 스킬을 프로젝트에 복사
-cp -r skills/planosh/ .claude/skills/
-cp -r skills/planosh-calibrate/ .claude/skills/
+# Claude Code 플러그인으로 설치
+claude plugin add ASDFGHoney/planosh
 
 # PRD에서 plan 생성
 /planosh path/to/prd.md

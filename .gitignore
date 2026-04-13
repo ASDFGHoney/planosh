@@ -1,0 +1,5 @@
+# eval workspace (dev-only data, not distributed)
+.claude/evals/
+
+# gstack local state
+.gstack/

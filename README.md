@@ -99,12 +99,11 @@ planosh is a concept, not a package to install. To start using it:
 
 **1. Write a plan.sh by hand** &mdash; any shell script with `claude -p` calls works.
 
-**2. Or use the reference skills** (Claude Code):
+**2. Or use the reference skills** (Claude Code plugin):
 
 ```bash
-# Copy skills into your project
-cp -r skills/planosh/ .claude/skills/
-cp -r skills/planosh-calibrate/ .claude/skills/
+# Install as a Claude Code plugin
+claude plugin add ASDFGHoney/planosh
 
 # Generate a plan from a PRD
 /planosh path/to/prd.md
