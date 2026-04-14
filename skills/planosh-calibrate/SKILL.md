@@ -30,7 +30,7 @@ planosh calibrate {plan-name} [flags]
 
 | 플래그 | 기본값 | 설명 |
 |--------|--------|------|
-| `[plan-name]` 또는 `--plan` | (자동 감지) | `.plan/` 안에 하나뿐이면 생략 가능 |
+| `[plan-name]` 또는 `--plan` | (필수) | `.plan/{plan-name}/` 디렉토리명 |
 | `--runs` | 3 | Step당 병렬 실행 횟수 |
 | `--max-retries` | 2 | 발산 Step당 패치 재시도 횟수 |
 | `--concurrency` | 1 | 동시에 실행할 run 수 |
@@ -46,7 +46,7 @@ planosh calibrate {plan-name} [flags]
 
 CLI 호출 전에 다음을 확인한다. 실패 시 사용자에게 안내하고 중단.
 
-1. **plan-name 모호성**: 사용자가 plan-name을 주지 않았고 `.plan/`에 plan이 여러 개면 어느 것인지 묻는다.
+1. **plan-name 필수**: 사용자가 plan-name을 주지 않았다면 `.plan/` 하위 디렉토리를 나열하고 어느 것인지 묻는다 (CLI는 plan-name 없이 호출 시 에러).
 2. **plan.sh의 `--testbed` 지원**: `grep -q 'testbed' .plan/{plan-name}/plan.sh`. 없으면 `/planosh`로 재생성하거나 수동 추가를 안내.
 3. **git 커밋 상태**: `.plan/{plan-name}/` 전체가 git에 추적되어 있어야 한다 (testbed golden은 `file://` clone에서 복사하므로 미커밋 파일은 누락됨).
 
