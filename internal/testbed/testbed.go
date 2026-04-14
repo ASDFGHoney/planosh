@@ -19,7 +19,9 @@ type Testbed struct {
 	ExcludeFile string
 }
 
-// Create clones projectRoot into ~/.planosh/testbed/{repo}--{planName}/golden/.
+// Create copies projectRoot into ~/.planosh/testbed/{repo}--{planName}/golden/
+// via rsync, honoring .planoshignore. git clone is intentionally avoided so
+// harnesses with nested git repos or gitignored paths work identically.
 func Create(projectRoot, planName string) (*Testbed, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -54,11 +56,6 @@ func Create(projectRoot, planName string) (*Testbed, error) {
 		}
 	}
 
-	cmd := exec.Command("git", "clone", "--local", projectRoot, goldenDir)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("git clone: %s: %w", strings.TrimSpace(string(out)), err)
-	}
-
 	patterns, err := LoadIgnorePatterns(projectRoot)
 	if err != nil {
 		return nil, err
@@ -67,14 +64,23 @@ func Create(projectRoot, planName string) (*Testbed, error) {
 		return nil, err
 	}
 
-	ok = true
-	return &Testbed{
+	if err := os.MkdirAll(goldenDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create golden dir: %w", err)
+	}
+
+	tb := &Testbed{
 		BaseDir:     baseDir,
 		GoldenDir:   goldenDir,
 		ProjectRoot: projectRoot,
 		PlanName:    planName,
 		ExcludeFile: excludeFile,
-	}, nil
+	}
+	if err := tb.rsync(projectRoot+"/", goldenDir+"/", "golden"); err != nil {
+		return nil, err
+	}
+
+	ok = true
+	return tb, nil
 }
 
 // RunDir returns the path for the i-th run directory.

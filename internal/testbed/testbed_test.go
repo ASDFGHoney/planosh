@@ -90,6 +90,34 @@ func TestCreate(t *testing.T) {
 	assert.FileExists(t, filepath.Join(tb.GoldenDir, "pkg", "lib.go"))
 }
 
+func TestCreate_IncludesGitignoredPaths(t *testing.T) {
+	// Regression: rsync-based Create must copy paths that git would skip
+	// (e.g. nested harness repos kept outside the parent's tracked tree).
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	projectRoot := setupGitRepo(t)
+	require.NoError(t, os.WriteFile(
+		filepath.Join(projectRoot, ".gitignore"),
+		[]byte("codespace/\n"), 0o644))
+
+	nested := filepath.Join(projectRoot, "codespace", "app")
+	require.NoError(t, os.MkdirAll(nested, 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(nested, "README.md"), []byte("nested\n"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(nested, ".git"), 0o755))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(nested, ".git", "HEAD"),
+		[]byte("ref: refs/heads/main\n"), 0o644))
+
+	tb, err := Create(projectRoot, "nested")
+	require.NoError(t, err)
+	defer tb.Cleanup(false)
+
+	assert.FileExists(t, filepath.Join(tb.GoldenDir, "codespace", "app", "README.md"))
+	assert.FileExists(t, filepath.Join(tb.GoldenDir, "codespace", "app", ".git", "HEAD"))
+}
+
 func TestCreate_WithPlanoshignore(t *testing.T) {
 	tmpHome := t.TempDir()
 	t.Setenv("HOME", tmpHome)
