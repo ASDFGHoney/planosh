@@ -113,7 +113,7 @@ func runCalibrate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("testbed 생성 실패: %w", err)
 	}
-	defer tb.Cleanup(!flags.keepTestbed)
+	defer tb.Cleanup(flags.keepTestbed)
 
 	// Verify .plan/ exists in golden
 	goldenPlanDir := filepath.Join(tb.GoldenDir, ".plan", planName)
