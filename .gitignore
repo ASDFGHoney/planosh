@@ -7,3 +7,9 @@
 # local docs and todos
 docs/
 TODOS.md
+
+# Go build artifacts
+/planosh
+*.exe
+dist/
+
